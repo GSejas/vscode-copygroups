@@ -25,16 +25,3 @@ export function addLineNumbers(content: string, maxDigits = 3): string {
     .join('\n');
 }
 
-/**
- * Add line numbers to multiple chunks of content
- * Each chunk starts at line 1 (scoped numbering)
- * Useful for multi-file outputs where each file has its own line numbers
- */
-export function addLineNumbersToChunks(chunks: { header: string; content: string }[]): string {
-  return chunks
-    .map(chunk => {
-      const numberedContent = addLineNumbers(chunk.content);
-      return `${chunk.header}\n\n${numberedContent}`;
-    })
-    .join('\n\n---\n\n');
-}

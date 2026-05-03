@@ -18,8 +18,6 @@ export interface CopyConfig {
   excludePatterns: string[];     // Glob patterns to exclude (e.g., ["node_modules/**", ".git/**"])
 
   // UI/UX preferences
-  showPreviewTree: boolean;       // Show expandable tree before confirming copy
-  autoFavoriteSize: number;       // Entries with < N files auto-marked favorite
   skipBinaryFiles: boolean;       // Automatically skip .exe, .png, .bin, etc.
   addLineNumbers: boolean;        // Prepend line numbers to extracted code (e.g., "001: ")
 }
@@ -40,8 +38,6 @@ export const DEFAULT_COPY_CONFIG: CopyConfig = {
     '**/.DS_Store',
     '**/*.log',
   ],
-  showPreviewTree: true,
-  autoFavoriteSize: 5,
   skipBinaryFiles: true,
   addLineNumbers: true,
 };
@@ -59,8 +55,6 @@ export function validateCopyConfig(config: Partial<CopyConfig>): CopyConfig {
     maxDirectoryDepth: Math.max(1, config.maxDirectoryDepth || defaults.maxDirectoryDepth),
     includePatterns: config.includePatterns || defaults.includePatterns,
     excludePatterns: config.excludePatterns || defaults.excludePatterns,
-    showPreviewTree: config.showPreviewTree !== undefined ? config.showPreviewTree : defaults.showPreviewTree,
-    autoFavoriteSize: Math.max(0, config.autoFavoriteSize || defaults.autoFavoriteSize),
     skipBinaryFiles: config.skipBinaryFiles !== undefined ? config.skipBinaryFiles : defaults.skipBinaryFiles,
     addLineNumbers: config.addLineNumbers !== undefined ? config.addLineNumbers : defaults.addLineNumbers,
   };

@@ -3,7 +3,7 @@
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
   "version": "0.1.0",
-  "publisher": "copygroups",
+  "publisher": "GSejas",
   "license": "MIT",
   "engines": {
     "vscode": "^1.70.0"
@@ -19,6 +19,13 @@
     "context",
     "python"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GSejas/vscode-copygroups"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "scripts": {
     "vscode:prepublish": "npm run esbuild-base -- --minify",
@@ -27,22 +34,25 @@
     "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
     "test": "jest",
     "test:watch": "jest --watch",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/jest": "^28.1.0",
+    "@types/minimatch": "^5.1.2",
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.70.0",
     "@typescript-eslint/eslint-plugin": "^5.30.0",
     "@typescript-eslint/parser": "^5.30.0",
-    "esbuild": "^0.14.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.28.0",
     "eslint": "^8.18.0",
     "jest": "^28.1.0",
     "ts-jest": "^28.0.5",
     "typescript": "^4.7.4"
   },
   "dependencies": {
-    "uuid": "^9.0.0",
     "minimatch": "^5.1.0"
   },
   "contributes": {
@@ -90,6 +100,14 @@
       {
         "command": "copygroups.renameGroup",
         "title": "Copy Groups: Rename Group"
+      },
+      {
+        "command": "copygroups.setGroupMode",
+        "title": "Copy Groups: Set Context Mode"
+      },
+      {
+        "command": "copygroups.setGroupPreprompt",
+        "title": "Copy Groups: Set Preprompt"
       },
       {
         "command": "copygroups.removeFileFromGroup",
@@ -191,6 +209,16 @@
           "command": "copygroups.renameGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "2_edit@1"
+        },
+        {
+          "command": "copygroups.setGroupMode",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "copygroups.setGroupPreprompt",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "2_edit@3"
         },
         {
           "command": "copygroups.deleteGroup",

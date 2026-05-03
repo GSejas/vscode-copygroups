@@ -18,6 +18,7 @@ import { CopyHistoryService } from './application/services/CopyHistoryService';
 
 // Domain
 import { ContextModeType } from './domain/valueObjects/ContextMode';
+import { SYSTEM_PREPROMPTS } from './domain/entities/Preprompt';
 
 // Presentation
 import { GroupTreeProvider, GroupItem } from './presentation/treeview/GroupTreeProvider';
@@ -73,8 +74,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           return;
         }
 
-        const fileUris = files.map(f => f.toString());
-        await exportService.copySelectedFiles(fileUris, { type: 'full' });
+        await exportService.copyContext(files);
         historyProvider.refresh();
         vscode.window.showInformationMessage(`Copied ${files.length} file${files.length !== 1 ? 's' : ''} to clipboard.`);
       }
@@ -91,7 +91,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
 
         try {
-          await exportService.copyFolder(folderUri.toString(), { type: 'skeleton' });
+          await exportService.copyContext([folderUri]);
           historyProvider.refresh();
           const folderName = folderUri.fsPath.split(/[\\/]/).pop();
           vscode.window.showInformationMessage(`Copied folder "${folderName}" to clipboard.`);
@@ -276,6 +276,59 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       async (groupId: string, fileUri: string) => {
         await groupService.removeFileFromGroup(groupId, fileUri);
         groupProvider.refresh();
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.setGroupMode',
+      async (arg: GroupItem | string) => {
+        const groupId = arg instanceof GroupItem ? arg.group.id : arg;
+        const group = await groupService.getGroup(groupId);
+        if (!group) return;
+
+        const modes: ContextModeType[] = ['full', 'skeleton', 'docstring', 'headers', 'head-tail', 'smart'];
+        const selected = await vscode.window.showQuickPick(
+          modes.map(m => ({ label: m, description: m === group.contextMode.type ? '(current)' : '' })),
+          { placeHolder: 'Select context mode for this group' }
+        );
+        if (!selected || selected.label === group.contextMode.type) return;
+
+        await groupService.setContextMode(groupId, { type: selected.label as ContextModeType });
+        groupProvider.refresh();
+        vscode.window.showInformationMessage(`Context mode set to "${selected.label}".`);
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.setGroupPreprompt',
+      async (arg: GroupItem | string) => {
+        const groupId = arg instanceof GroupItem ? arg.group.id : arg;
+        const group = await groupService.getGroup(groupId);
+        if (!group) return;
+
+        const options = [
+          { label: 'None', description: 'Remove preprompt', preprompt: undefined as typeof SYSTEM_PREPROMPTS[string] | undefined },
+          ...Object.values(SYSTEM_PREPROMPTS).map(p => ({
+            label: p.name,
+            description: p.mode,
+            preprompt: p,
+          })),
+        ];
+
+        const selected = await vscode.window.showQuickPick(options, {
+          placeHolder: group.preprompt ? `Current: ${group.preprompt.name}` : 'Attach a preprompt template',
+        });
+        if (selected === undefined) return;
+
+        await groupService.setPreprompt(groupId, selected.preprompt);
+        groupProvider.refresh();
+        vscode.window.showInformationMessage(
+          selected.preprompt ? `Preprompt "${selected.preprompt.name}" attached.` : 'Preprompt removed.'
+        );
       }
     )
   );

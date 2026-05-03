@@ -92,17 +92,19 @@ export class GroupTreeProvider implements vscode.TreeDataProvider<GroupTreeNode>
   }
 
   async getChildren(element?: GroupTreeNode): Promise<GroupTreeNode[]> {
-    // Root — two sections
     if (!element) {
       const all = await this.groupService.getAllGroups();
+      const bookmarkedCount = all.filter(g => g.isBookmarked).length;
+      const unbookmarkedCount = all.length - bookmarkedCount;
+
       const bookmarkedSection = new SectionItem(
-        `⭐ Bookmarked (${all.filter(g => g.isBookmarked).length})`,
+        `⭐ Bookmarked (${bookmarkedCount})`,
         'bookmarked'
       );
       const allSection = new SectionItem(
-        `📁 All Groups (${all.length})`,
+        `📁 All Groups (${unbookmarkedCount})`,
         'all',
-        all.length > 0
+        unbookmarkedCount > 0
           ? vscode.TreeItemCollapsibleState.Expanded
           : vscode.TreeItemCollapsibleState.Collapsed
       );
@@ -116,7 +118,7 @@ export class GroupTreeProvider implements vscode.TreeDataProvider<GroupTreeNode>
       if (element.sectionKey === 'bookmarked') {
         return sorted.filter(g => g.isBookmarked).map(g => new GroupItem(g));
       } else {
-        return sorted.map(g => new GroupItem(g));
+        return sorted.filter(g => !g.isBookmarked).map(g => new GroupItem(g));
       }
     }
 

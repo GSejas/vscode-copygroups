@@ -10,9 +10,9 @@
             ],
             "name": "Launch Extension",
             "outFiles": [
-                "${workspaceFolder}/out/**/*.js"
+                "${workspaceFolder}/dist/**/*.js"
             ],
-            "preLaunchTask": "npm",
+            "preLaunchTask": "npm: esbuild",
             "request": "launch",
             "type": "extensionHost"
         }

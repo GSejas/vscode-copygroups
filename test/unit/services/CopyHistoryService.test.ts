@@ -6,7 +6,7 @@ import { CopyHistoryService } from '../../../src/application/services/CopyHistor
 import { ICopyHistoryRepository } from '../../../src/domain/interfaces/ICopyHistoryRepository';
 import { CopyHistoryEntry, createCopyHistoryEntry } from '../../../src/domain/entities/CopyHistoryEntry';
 
-function makeEntry(overrides?: Partial<CopyHistoryEntry>): CopyHistoryEntry {
+function makeEntry(): CopyHistoryEntry {
   return createCopyHistoryEntry(
     'group-1',
     'My Group',

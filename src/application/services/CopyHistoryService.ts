@@ -10,8 +10,16 @@ import {
   CopyTrigger,
   createCopyHistoryEntry,
 } from '../../domain/entities/CopyHistoryEntry';
+import { ContextMode } from '../../domain/valueObjects/ContextMode';
 import { Group } from '../../domain/entities/Group';
 import { ICopyHistoryRepository } from '../../domain/interfaces/ICopyHistoryRepository';
+
+export interface CopySource {
+  id: string;
+  name: string;
+  contextMode: ContextMode;
+  preprompt?: { name?: string };
+}
 
 export class CopyHistoryService {
   constructor(private repository: ICopyHistoryRepository) {}
@@ -21,19 +29,19 @@ export class CopyHistoryService {
    * Returns the saved entry so callers can reference it.
    */
   async record(
-    group: Group,
+    source: CopySource | Group,
     output: string,
     files: CopiedFileSnapshot[],
     trigger: CopyTrigger
   ): Promise<CopyHistoryEntry> {
     const entry = createCopyHistoryEntry(
-      group.id,
-      group.name,
+      source.id,
+      source.name,
       output,
       files,
-      group.contextMode,
+      source.contextMode,
       trigger,
-      group.preprompt?.name
+      source.preprompt?.name
     );
 
     await this.repository.save(entry);

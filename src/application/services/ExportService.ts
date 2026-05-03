@@ -11,7 +11,7 @@ import { CopiedFileSnapshot } from '../../domain/entities/CopyHistoryEntry';
 import { ContextMode, ContextModeType } from '../../domain/valueObjects/ContextMode';
 import { CopyConfig } from '../../domain/valueObjects/CopyConfig';
 import { ContextExtractionService } from './ContextExtractionService';
-import { CopyHistoryService } from './CopyHistoryService';
+import { CopyHistoryService, CopySource } from './CopyHistoryService';
 import { IFileContentProvider } from '../../domain/interfaces/IFileContentProvider';
 import { ConfigRepository } from '../../infrastructure/repositories/ConfigRepository';
 import { PatternMatcher, isBinaryFile } from '../../utils/patternMatcher';
@@ -19,14 +19,14 @@ import { addLineNumbers } from '../../utils/lineNumberer';
 
 export interface ExportOptions {
   includePreprompt?: boolean;
-  format?: 'markdown' | 'json';
 }
 
-export interface CopyResult {
+interface ProcessResult {
   snapshots: CopiedFileSnapshot[];
+  relativePaths: string[];
+  skippedReasons: Map<string, string>;
   totalSize: number;
-  skippedCount: number;
-  skippedReasons: Map<string, string>; // filePath -> reason
+  fileCount: number;
 }
 
 export class ExportService {
@@ -37,132 +37,14 @@ export class ExportService {
     private configRepo: ConfigRepository
   ) {}
 
-  /**
-   * Check if a file should be processed based on config rules
-   */
-  private async shouldProcessFile(fileUri: string, config: CopyConfig): Promise<{ allowed: boolean; reason?: string }> {
-    const relativePath = await this.fileProvider.getRelativePath(fileUri);
+  // ─── Shared file processing ───────────────────────────────────────────────
 
-    // Check patterns
-    const matcher = new PatternMatcher(config.includePatterns, config.excludePatterns);
-    if (!matcher.shouldInclude(relativePath)) {
-      return { allowed: false, reason: 'Excluded by pattern' };
-    }
-
-    // Check binary files
-    if (config.skipBinaryFiles && isBinaryFile(relativePath)) {
-      return { allowed: false, reason: 'Binary file skipped' };
-    }
-
-    // Check file size
-    try {
-      const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(fileUri));
-      if (stat.size > config.maxFileSizeBytes) {
-        return { allowed: false, reason: `File too large (${(stat.size / 1024).toFixed(0)} KB)` };
-      }
-    } catch (err) {
-      return { allowed: false, reason: 'Cannot read file size' };
-    }
-
-    return { allowed: true };
-  }
-
-  /**
-   * Copy a single file with size tracking
-   */
-  private async extractFile(
-    fileUri: string,
-    contextMode: ContextMode,
-    accumulatedSize: number,
-    maxTotalSize: number
-  ): Promise<{
-    snapshot: CopiedFileSnapshot;
-    size: number;
-    withinLimit: boolean;
-  }> {
-    const relativePath = await this.fileProvider.getRelativePath(fileUri);
-
-    try {
-      const content = await this.contextExtraction.extract(fileUri, contextMode);
-      const size = new Blob([content]).size;
-
-      return {
-        snapshot: {
-          uri: fileUri,
-          relativePath,
-          extractedContent: content,
-          contextMode,
-        },
-        size,
-        withinLimit: accumulatedSize + size <= maxTotalSize,
-      };
-    } catch (err) {
-      return {
-        snapshot: {
-          uri: fileUri,
-          relativePath,
-          extractedContent: '',
-          contextMode,
-          error: String(err),
-        },
-        size: 0,
-        withinLimit: true,
-      };
-    }
-  }
-
-  /**
-   * Unified copy context entry point.
-   * Intelligently handles files, folders, or multi-file selections.
-   * - Single file → extract with config limits
-   * - Folder → recursive scan with config.maxDirectoryDepth
-   * - Multiple files → direct multi-file copy
-   */
-  async copyContext(
-    uris: vscode.Uri[],
-    contextMode?: ContextMode
-  ): Promise<void> {
-    if (!uris || uris.length === 0) {
-      throw new Error('No files or folders selected');
-    }
-
-    const config = await this.configRepo.get();
-    const mode: ContextMode = contextMode || { type: config.defaultContextMode as ContextModeType };
-
-    // Single item: check if file or folder
-    if (uris.length === 1) {
-      const uri = uris[0];
-      try {
-        const stat = await vscode.workspace.fs.stat(uri);
-        if (stat.type === vscode.FileType.Directory) {
-          // It's a folder
-          await this.copyFolder(uri.toString(), mode);
-        } else {
-          // Single file: wrap in array and copy as multi-file
-          await this.copySelectedFiles([uri.toString()], mode);
-        }
-      } catch (err) {
-        throw new Error(`Cannot access item: ${String(err)}`);
-      }
-    } else {
-      // Multiple items: copy all as multi-file
-      await this.copySelectedFiles(
-        uris.map(uri => uri.toString()),
-        mode
-      );
-    }
-  }
-
-  /**
-   * Copy multiple selected files directly to clipboard without creating a group.
-   * Auto-generates a history entry name based on file count and timestamp.
-   * Respects config limits: max files, max total size, patterns, binary skip.
-   */
-  async copySelectedFiles(
+  private async processFiles(
     fileUris: string[],
-    contextMode: ContextMode = { type: 'full' }
-  ): Promise<void> {
-    const config = await this.configRepo.get();
+    contextMode: ContextMode,
+    config: CopyConfig,
+    skipPatternCheck = false
+  ): Promise<ProcessResult> {
     const snapshots: CopiedFileSnapshot[] = [];
     const relativePaths: string[] = [];
     const skippedReasons = new Map<string, string>();
@@ -170,12 +52,10 @@ export class ExportService {
     let fileCount = 0;
 
     for (const fileUri of fileUris) {
-      // Check hard limits
       if (fileCount >= config.maxFileCount) {
         skippedReasons.set(fileUri, `Max file count (${config.maxFileCount}) reached`);
         continue;
       }
-
       if (totalSize >= config.maxTotalSizeBytes) {
         skippedReasons.set(fileUri, 'Max total size reached');
         continue;
@@ -184,74 +64,240 @@ export class ExportService {
       try {
         const exists = await this.fileProvider.fileExists(fileUri);
         if (!exists) {
-          snapshots.push({
-            uri: fileUri,
-            relativePath: fileUri,
-            extractedContent: '',
-            contextMode,
-            error: 'File not found',
-          });
+          snapshots.push({ uri: fileUri, relativePath: fileUri, extractedContent: '', contextMode, error: 'File not found' });
           skippedReasons.set(fileUri, 'File not found');
           continue;
         }
 
-        // Check filtering rules
-        const check = await this.shouldProcessFile(fileUri, config);
-        if (!check.allowed) {
-          skippedReasons.set(fileUri, check.reason || 'Filtered out');
+        // Pattern + binary + size checks (pattern skipped when walkDirectory already filtered)
+        if (!skipPatternCheck) {
+          const relativePath = await this.fileProvider.getRelativePath(fileUri);
+          const matcher = new PatternMatcher(config.includePatterns, config.excludePatterns);
+          if (!matcher.shouldInclude(relativePath)) {
+            skippedReasons.set(fileUri, 'Excluded by pattern');
+            continue;
+          }
+        }
+
+        if (config.skipBinaryFiles) {
+          const rp = await this.fileProvider.getRelativePath(fileUri);
+          if (isBinaryFile(rp)) {
+            skippedReasons.set(fileUri, 'Binary file skipped');
+            continue;
+          }
+        }
+
+        const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(fileUri));
+        if (stat.size > config.maxFileSizeBytes) {
+          skippedReasons.set(fileUri, `File too large (${(stat.size / 1024).toFixed(0)} KB)`);
           continue;
         }
 
         const relativePath = await this.fileProvider.getRelativePath(fileUri);
-        const result = await this.extractFile(fileUri, contextMode, totalSize, config.maxTotalSizeBytes);
+        const content = await this.contextExtraction.extract(fileUri, contextMode);
+        const size = new Blob([content]).size;
 
-        if (!result.withinLimit) {
+        if (totalSize + size > config.maxTotalSizeBytes) {
           skippedReasons.set(fileUri, 'Would exceed total size limit');
           continue;
         }
 
         relativePaths.push(relativePath);
-        snapshots.push(result.snapshot);
-        totalSize += result.size;
+        snapshots.push({ uri: fileUri, relativePath, extractedContent: content, contextMode });
+        totalSize += size;
         fileCount++;
       } catch (err) {
-        snapshots.push({
-          uri: fileUri,
-          relativePath: fileUri,
-          extractedContent: '',
-          contextMode,
-          error: String(err),
-        });
+        snapshots.push({ uri: fileUri, relativePath: fileUri, extractedContent: '', contextMode, error: String(err) });
         skippedReasons.set(fileUri, String(err));
       }
     }
 
-    // Render output
+    return { snapshots, relativePaths, skippedReasons, totalSize, fileCount };
+  }
+
+  // ─── Public API ───────────────────────────────────────────────────────────
+
+  /**
+   * Unified copy context entry point.
+   * - Single folder → recursive scan
+   * - Single file or multiple items → multi-file copy
+   */
+  async copyContext(uris: vscode.Uri[], contextMode?: ContextMode): Promise<void> {
+    if (!uris || uris.length === 0) {
+      throw new Error('No files or folders selected');
+    }
+
+    const config = await this.configRepo.get();
+    const mode: ContextMode = contextMode || { type: config.defaultContextMode as ContextModeType };
+
+    if (uris.length === 1) {
+      const uri = uris[0];
+      try {
+        const stat = await vscode.workspace.fs.stat(uri);
+        if (stat.type === vscode.FileType.Directory) {
+          await this.copyFolder(uri.toString(), mode);
+        } else {
+          await this.copySelectedFiles([uri.toString()], mode);
+        }
+      } catch (err) {
+        throw new Error(`Cannot access item: ${String(err)}`);
+      }
+    } else {
+      await this.copySelectedFiles(uris.map(u => u.toString()), mode);
+    }
+  }
+
+  async copySelectedFiles(
+    fileUris: string[],
+    contextMode: ContextMode = { type: 'full' }
+  ): Promise<void> {
+    const config = await this.configRepo.get();
+    const { snapshots, relativePaths, skippedReasons, totalSize } =
+      await this.processFiles(fileUris, contextMode, config);
+
     const output = this.renderMultiFileMarkdown(snapshots, relativePaths, skippedReasons, totalSize, config);
     await vscode.env.clipboard.writeText(output);
 
-    // Auto-generate entry name
-    const timestamp = new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
     const successCount = snapshots.filter(s => !s.error).length;
-    const entryName = `${successCount} file${successCount !== 1 ? 's' : ''} • ${timestamp}`;
+    let entryName: string;
+    if (successCount === 1 && relativePaths[0]) {
+      entryName = relativePaths[0].split(/[/\\]/).pop() || relativePaths[0];
+    } else {
+      const timestamp = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      entryName = `${successCount} file${successCount !== 1 ? 's' : ''} • ${timestamp}`;
+    }
 
-    const syntheticGroup: any = {
-      id: `direct-${Date.now()}`,
-      name: entryName,
-      contextMode,
-    };
+    const source: CopySource = { id: `direct-${Date.now()}`, name: entryName, contextMode };
+    await this.historyService.record(source, output, snapshots, 'direct-multi-file');
+  }
 
-    await this.historyService.record(syntheticGroup, output, snapshots, 'direct-multi-file');
+  async copyFolder(
+    folderUri: string,
+    contextMode: ContextMode = { type: 'skeleton' },
+    maxDepth = 10
+  ): Promise<void> {
+    const config = await this.configRepo.get();
+    const folderVsCodeUri = vscode.Uri.parse(folderUri);
+    const folderName = folderVsCodeUri.fsPath.split(/[\\/]/).pop() || 'folder';
+
+    const fileUris: string[] = [];
+    await this.walkDirectory(folderVsCodeUri, fileUris, Math.min(maxDepth, config.maxDirectoryDepth), 0, config);
+
+    if (fileUris.length === 0) {
+      throw new Error('No files found in folder');
+    }
+
+    // Pattern already applied by walkDirectory; skip it in processFiles
+    const { snapshots, relativePaths, skippedReasons, totalSize, fileCount } =
+      await this.processFiles(fileUris, contextMode, config, true);
+
+    if (fileCount === 0) {
+      throw new Error('No files matched after filtering');
+    }
+
+    const output = this.renderFolderMarkdown(folderName, snapshots, relativePaths, skippedReasons, totalSize, config);
+    await vscode.env.clipboard.writeText(output);
+
+    const entryName = `${folderName} (${fileCount} file${fileCount !== 1 ? 's' : ''})`;
+    const source: CopySource = { id: `folder-${Date.now()}`, name: entryName, contextMode };
+    await this.historyService.record(source, output, snapshots, 'folder-contents');
+  }
+
+  async copyGroup(group: Group): Promise<void> {
+    const { output, snapshots } = await this.buildOutput(group);
+    await vscode.env.clipboard.writeText(output);
+    await this.historyService.record(group, output, snapshots, 'clipboard');
+  }
+
+  async exportToMarkdown(group: Group, options: ExportOptions = {}): Promise<string> {
+    const { output, snapshots } = await this.buildOutput(group, options.includePreprompt);
+    await this.historyService.record(group, output, snapshots, 'export-markdown');
+    return output;
+  }
+
+  /**
+   * Export to JSON string and log as an export operation.
+   * The JSON export does not include extracted file content — it serialises
+   * the group configuration only. History still records the event.
+   */
+  async exportToJSON(group: Group): Promise<string> {
+    const json = JSON.stringify({ ...group, exportedAt: new Date().toISOString() }, null, 2);
+    await this.historyService.record(group, json, [], 'export-json');
+    return json;
+  }
+
+  // ─── Core group builder ───────────────────────────────────────────────────
+
+  /**
+   * Shared extraction path. Gathers per-file snapshots once so the same
+   * pass is used both for rendering output and for the history record.
+   */
+  private async buildOutput(
+    group: Group,
+    includePreprompt = true
+  ): Promise<{ output: string; snapshots: CopiedFileSnapshot[] }> {
+    const config = await this.configRepo.get();
+    const snapshots: CopiedFileSnapshot[] = [];
+
+    for (const fileRef of group.fileReferences) {
+      const effectiveMode = fileRef.overrideContextMode || group.contextMode;
+      try {
+        const exists = await this.fileProvider.fileExists(fileRef.uri);
+        if (!exists) {
+          snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: 'File not found' });
+          continue;
+        }
+        const extractedContent = await this.contextExtraction.extract(fileRef.uri, effectiveMode);
+        snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent, contextMode: effectiveMode });
+      } catch (err) {
+        snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: String(err) });
+      }
+    }
+
+    const output = group.preprompt && includePreprompt
+      ? this.renderWithPreprompt(group, snapshots, config)
+      : this.renderMarkdown(group, snapshots, config);
+
+    return { output, snapshots };
+  }
+
+  // ─── Rendering ────────────────────────────────────────────────────────────
+
+  private renderMarkdown(group: Group, snapshots: CopiedFileSnapshot[], config?: CopyConfig): string {
+    const parts: string[] = [];
+
+    parts.push(`# Files from Group: ${group.name}\n`);
+    if (group.description) {
+      parts.push(`> ${group.description}\n`);
+    }
+    parts.push(`Context Mode: \`${group.contextMode.type}\`\n`);
+    parts.push(`Files: ${group.fileReferences.length}\n`);
+    if (group.tags.length > 0) {
+      parts.push(`Tags: ${group.tags.map(t => `\`${t.name}\``).join(', ')}\n`);
+    }
+    parts.push('\n---\n\n');
+
+    for (const snap of snapshots) {
+      parts.push(`## ${snap.relativePath}\n\n`);
+      if (snap.error) {
+        parts.push(`> ⚠️ ${snap.error}\n\n`);
+      } else {
+        const lang = getLanguageTag(snap.relativePath);
+        const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
+        parts.push(`\`\`\`${lang}\n`);
+        parts.push(content);
+        parts.push('\n```\n\n');
+      }
+    }
+
+    return parts.join('');
   }
 
   private renderMultiFileMarkdown(
     snapshots: CopiedFileSnapshot[],
     relativePaths: string[],
-    skippedReasons: Map<string, string> = new Map(),
-    totalSize = 0,
+    skippedReasons: Map<string, string>,
+    totalSize: number,
     config?: CopyConfig
   ): string {
     const parts: string[] = [];
@@ -281,8 +327,9 @@ export class ExportService {
       if (snap.error) {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
+        const lang = getLanguageTag(snap.relativePath);
         const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
-        parts.push('```\n');
+        parts.push(`\`\`\`${lang}\n`);
         parts.push(content);
         parts.push('\n```\n\n');
       }
@@ -291,140 +338,12 @@ export class ExportService {
     return parts.join('');
   }
 
-  /**
-   * Copy all files in a folder recursively to clipboard.
-   * Auto-generates history entry name: "folder-name (N files)"
-   * Respects config limits: max files, max total size, patterns, binary skip.
-   */
-  async copyFolder(
-    folderUri: string,
-    contextMode: ContextMode = { type: 'skeleton' },
-    maxDepth = 10
-  ): Promise<void> {
-    const config = await this.configRepo.get();
-    const folderVsCodeUri = vscode.Uri.parse(folderUri);
-    const folderName = folderVsCodeUri.fsPath.split(/[\\/]/).pop() || 'folder';
-
-    const fileUris: string[] = [];
-    await this.walkDirectory(folderVsCodeUri, fileUris, Math.min(maxDepth, config.maxDirectoryDepth), 0, config);
-
-    if (fileUris.length === 0) {
-      throw new Error('No files found in folder');
-    }
-
-    const snapshots: CopiedFileSnapshot[] = [];
-    const relativePaths: string[] = [];
-    const skippedReasons = new Map<string, string>();
-    let totalSize = 0;
-    let fileCount = 0;
-
-    for (const fileUri of fileUris) {
-      // Check hard limits
-      if (fileCount >= config.maxFileCount) {
-        skippedReasons.set(fileUri, `Max file count (${config.maxFileCount}) reached`);
-        continue;
-      }
-
-      if (totalSize >= config.maxTotalSizeBytes) {
-        skippedReasons.set(fileUri, 'Max total size reached');
-        continue;
-      }
-
-      try {
-        const exists = await this.fileProvider.fileExists(fileUri);
-        if (!exists) {
-          skippedReasons.set(fileUri, 'File not found');
-          continue;
-        }
-
-        // Check filtering rules
-        const check = await this.shouldProcessFile(fileUri, config);
-        if (!check.allowed) {
-          skippedReasons.set(fileUri, check.reason || 'Filtered out');
-          continue;
-        }
-
-        const relativePath = await this.fileProvider.getRelativePath(fileUri);
-        const result = await this.extractFile(fileUri, contextMode, totalSize, config.maxTotalSizeBytes);
-
-        if (!result.withinLimit) {
-          skippedReasons.set(fileUri, 'Would exceed total size limit');
-          continue;
-        }
-
-        relativePaths.push(relativePath);
-        snapshots.push(result.snapshot);
-        totalSize += result.size;
-        fileCount++;
-      } catch (err) {
-        skippedReasons.set(fileUri, String(err));
-      }
-    }
-
-    if (fileCount === 0) {
-      throw new Error('No files matched after filtering');
-    }
-
-    // Render output
-    const output = this.renderFolderMarkdown(folderName, snapshots, relativePaths, skippedReasons, totalSize, config);
-    await vscode.env.clipboard.writeText(output);
-
-    // Auto-generate entry name
-    const entryName = `${folderName} (${fileCount} file${fileCount !== 1 ? 's' : ''})`;
-
-    const syntheticGroup: any = {
-      id: `folder-${Date.now()}`,
-      name: entryName,
-      contextMode,
-    };
-
-    await this.historyService.record(syntheticGroup, output, snapshots, 'folder-contents');
-  }
-
-  private async walkDirectory(
-    dirUri: vscode.Uri,
-    fileUris: string[],
-    maxDepth: number,
-    currentDepth: number,
-    config?: CopyConfig
-  ): Promise<void> {
-    if (currentDepth >= maxDepth) return;
-
-    try {
-      const entries = await vscode.workspace.fs.readDirectory(dirUri);
-      const matcher = config ? new PatternMatcher(config.includePatterns, config.excludePatterns) : null;
-
-      for (const [name, type] of entries) {
-        // Skip hidden files and common patterns
-        if (name.startsWith('.') || name === 'node_modules') {
-          continue;
-        }
-
-        const childUri = vscode.Uri.joinPath(dirUri, name);
-        const relativePath = await this.fileProvider.getRelativePath(childUri.toString());
-
-        // Skip if excluded by pattern
-        if (matcher && !matcher.shouldInclude(relativePath)) {
-          continue;
-        }
-
-        if (type === vscode.FileType.File) {
-          fileUris.push(childUri.toString());
-        } else if (type === vscode.FileType.Directory) {
-          await this.walkDirectory(childUri, fileUris, maxDepth, currentDepth + 1, config);
-        }
-      }
-    } catch (err) {
-      // Skip inaccessible directories
-    }
-  }
-
   private renderFolderMarkdown(
     folderName: string,
     snapshots: CopiedFileSnapshot[],
     relativePaths: string[],
-    skippedReasons: Map<string, string> = new Map(),
-    totalSize = 0,
+    skippedReasons: Map<string, string>,
+    totalSize: number,
     config?: CopyConfig
   ): string {
     const parts: string[] = [];
@@ -454,122 +373,9 @@ export class ExportService {
       if (snap.error) {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
+        const lang = getLanguageTag(snap.relativePath);
         const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
-        parts.push('```\n');
-        parts.push(content);
-        parts.push('\n```\n\n');
-      }
-    }
-
-    return parts.join('');
-  }
-
-  /**
-   * Copy a group to clipboard and log the operation.
-   */
-  async copyGroup(group: Group): Promise<void> {
-    const { output, snapshots } = await this.buildOutput(group);
-    await vscode.env.clipboard.writeText(output);
-    await this.historyService.record(group, output, snapshots, 'clipboard');
-  }
-
-  /**
-   * Wipes non-favourite entries. Favourited entries are preserved.
-   */
-  async exportToMarkdown(group: Group, options: ExportOptions = {}): Promise<string> {
-    const { output, snapshots } = await this.buildOutput(group, options.includePreprompt);
-    await this.historyService.record(group, output, snapshots, 'export-markdown');
-    return output;
-  }
-
-  /**
-   * Export to JSON string and log as an export operation.
-   * The JSON export does not include extracted file content — it serialises
-   * the group configuration only. History still records the event.
-   */
-  async exportToJSON(group: Group): Promise<string> {
-    const json = JSON.stringify({ ...group, exportedAt: new Date().toISOString() }, null, 2);
-    // Pass empty snapshots — no content extraction happens for JSON config export
-    await this.historyService.record(group, json, [], 'export-json');
-    return json;
-  }
-
-  // ─── Core builder ────────────────────────────────────────────────────────
-
-  /**
-   * Shared extraction path. Gathers per-file snapshots once so the same
-   * pass is used both for rendering output and for the history record.
-   */
-  private async buildOutput(
-    group: Group,
-    includePreprompt = true
-  ): Promise<{ output: string; snapshots: CopiedFileSnapshot[] }> {
-    const config = await this.configRepo.get();
-    const snapshots: CopiedFileSnapshot[] = [];
-
-    // Gather file contents
-    for (const fileRef of group.fileReferences) {
-      const effectiveMode = fileRef.overrideContextMode || group.contextMode;
-      try {
-        const exists = await this.fileProvider.fileExists(fileRef.uri);
-        if (!exists) {
-          snapshots.push({
-            uri: fileRef.uri,
-            relativePath: fileRef.relativePath,
-            extractedContent: '',
-            contextMode: effectiveMode,
-            error: 'File not found',
-          });
-          continue;
-        }
-
-        const extractedContent = await this.contextExtraction.extract(fileRef.uri, effectiveMode);
-        snapshots.push({
-          uri: fileRef.uri,
-          relativePath: fileRef.relativePath,
-          extractedContent,
-          contextMode: effectiveMode,
-        });
-      } catch (err) {
-        snapshots.push({
-          uri: fileRef.uri,
-          relativePath: fileRef.relativePath,
-          extractedContent: '',
-          contextMode: effectiveMode,
-          error: String(err),
-        });
-      }
-    }
-
-    // Render output from snapshots
-    const output = group.preprompt && includePreprompt
-      ? this.renderWithPreprompt(group, snapshots, config)
-      : this.renderMarkdown(group, snapshots, config);
-
-    return { output, snapshots };
-  }
-
-  private renderMarkdown(group: Group, snapshots: CopiedFileSnapshot[], config?: CopyConfig): string {
-    const parts: string[] = [];
-
-    parts.push(`# Files from Group: ${group.name}\n`);
-    if (group.description) {
-      parts.push(`> ${group.description}\n`);
-    }
-    parts.push(`Context Mode: \`${group.contextMode.type}\`\n`);
-    parts.push(`Files: ${group.fileReferences.length}\n`);
-    if (group.tags.length > 0) {
-      parts.push(`Tags: ${group.tags.map(t => `\`${t.name}\``).join(', ')}\n`);
-    }
-    parts.push('\n---\n\n');
-
-    for (const snap of snapshots) {
-      parts.push(`## ${snap.relativePath}\n\n`);
-      if (snap.error) {
-        parts.push(`> ⚠️ ${snap.error}\n\n`);
-      } else {
-        const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
-        parts.push('```\n');
+        parts.push(`\`\`\`${lang}\n`);
         parts.push(content);
         parts.push('\n```\n\n');
       }
@@ -586,8 +392,9 @@ export class ExportService {
     const contextText = snapshots
       .filter(s => !s.error)
       .map(s => {
+        const lang = getLanguageTag(s.relativePath);
         const content = config?.addLineNumbers ? addLineNumbers(s.extractedContent) : s.extractedContent;
-        return `### ${s.relativePath}\n\`\`\`\n${content}\n\`\`\``;
+        return `### ${s.relativePath}\n\`\`\`${lang}\n${content}\n\`\`\``;
       })
       .join('\n\n');
 
@@ -607,18 +414,67 @@ export class ExportService {
     return result;
   }
 
-  // ─── Utility ─────────────────────────────────────────────────────────────
+  // ─── Directory walker ─────────────────────────────────────────────────────
 
-  estimateExportSize(group: Group): number {
-    let totalSize = 0;
+  private async walkDirectory(
+    dirUri: vscode.Uri,
+    fileUris: string[],
+    maxDepth: number,
+    currentDepth: number,
+    config?: CopyConfig
+  ): Promise<void> {
+    if (currentDepth >= maxDepth) return;
 
-    if (group.preprompt) {
-      totalSize += group.preprompt.template.length;
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(dirUri);
+      const matcher = config ? new PatternMatcher(config.includePatterns, config.excludePatterns) : null;
+
+      for (const [name, type] of entries) {
+        if (name.startsWith('.') || name === 'node_modules') {
+          continue;
+        }
+
+        const childUri = vscode.Uri.joinPath(dirUri, name);
+        const relativePath = await this.fileProvider.getRelativePath(childUri.toString());
+
+        if (matcher && !matcher.shouldInclude(relativePath)) {
+          continue;
+        }
+
+        if (type === vscode.FileType.File) {
+          fileUris.push(childUri.toString());
+        } else if (type === vscode.FileType.Directory) {
+          await this.walkDirectory(childUri, fileUris, maxDepth, currentDepth + 1, config);
+        }
+      }
+    } catch {
+      // Skip inaccessible directories
     }
-
-    totalSize += group.name.length + (group.description?.length || 0);
-    totalSize += group.tags.reduce((sum, t) => sum + t.name.length, 0);
-
-    return totalSize;
   }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const EXT_TO_LANG: Record<string, string> = {
+  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+  py: 'python', rb: 'ruby', go: 'go', rs: 'rust', java: 'java',
+  cs: 'csharp', cpp: 'cpp', c: 'c', h: 'c', hpp: 'cpp',
+  php: 'php', swift: 'swift', kt: 'kotlin', scala: 'scala',
+  sh: 'bash', bash: 'bash', zsh: 'bash', ps1: 'powershell',
+  sql: 'sql', html: 'html', css: 'css', scss: 'scss', less: 'less',
+  json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml', xml: 'xml',
+  md: 'markdown', mdx: 'markdown', txt: 'text',
+  dockerfile: 'dockerfile', makefile: 'makefile',
+};
+
+function getLanguageTag(relativePath: string): string {
+  const filename = relativePath.split(/[/\\]/).pop() || '';
+  const lower = filename.toLowerCase();
+
+  // Handle special filenames without extensions
+  if (lower === 'dockerfile') return 'dockerfile';
+  if (lower === 'makefile' || lower === 'gnumakefile') return 'makefile';
+
+  const ext = lower.split('.').pop() || '';
+  return EXT_TO_LANG[ext] || '';
 }

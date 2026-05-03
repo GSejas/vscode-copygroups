@@ -1,0 +1,24 @@
+# Source and dev files — not needed in packaged VSIX
+src/**
+test/**
+.vscode/**
+node_modules/**
+
+# Config files
+tsconfig.json
+jest.config.js
+.eslintrc.json
+.gitignore
+
+# Design / planning docs
+ARCHITECTURE.md
+DESIGN_DOCUMENT.md
+UI_UX_DESIGN.md
+
+# Build artifacts (dist/ is included)
+.git/**
+*.vsix
+
+# Misc
+*.log
+.DS_Store

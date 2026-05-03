@@ -19,16 +19,6 @@ export interface ContextMode {
   heuristic?: 'main-exports' | 'public-api'; // For 'smart' mode
 }
 
-export const CONTEXT_MODE_PRESETS: Record<string, ContextMode> = {
-  FULL: { type: 'full' },
-  DOCSTRING: { type: 'docstring' },
-  HEADERS_20: { type: 'headers', maxLines: 20 },
-  HEADERS_50: { type: 'headers', maxLines: 50 },
-  SKELETON: { type: 'skeleton' },
-  HEAD_TAIL: { type: 'head-tail', headLines: 10, tailLines: 5 },
-  SMART_EXPORTS: { type: 'smart', heuristic: 'main-exports' },
-};
-
 export function validateContextMode(mode: any): mode is ContextMode {
   if (!mode || typeof mode !== 'object') return false;
   if (!mode.type || typeof mode.type !== 'string') return false;
