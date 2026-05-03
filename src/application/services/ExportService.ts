@@ -15,6 +15,7 @@ import { CopyHistoryService } from './CopyHistoryService';
 import { IFileContentProvider } from '../../domain/interfaces/IFileContentProvider';
 import { ConfigRepository } from '../../infrastructure/repositories/ConfigRepository';
 import { PatternMatcher, isBinaryFile } from '../../utils/patternMatcher';
+import { addLineNumbers } from '../../utils/lineNumberer';
 
 export interface ExportOptions {
   includePreprompt?: boolean;
@@ -226,7 +227,7 @@ export class ExportService {
     }
 
     // Render output
-    const output = this.renderMultiFileMarkdown(snapshots, relativePaths, skippedReasons, totalSize);
+    const output = this.renderMultiFileMarkdown(snapshots, relativePaths, skippedReasons, totalSize, config);
     await vscode.env.clipboard.writeText(output);
 
     // Auto-generate entry name
@@ -250,7 +251,8 @@ export class ExportService {
     snapshots: CopiedFileSnapshot[],
     relativePaths: string[],
     skippedReasons: Map<string, string> = new Map(),
-    totalSize = 0
+    totalSize = 0,
+    config?: CopyConfig
   ): string {
     const parts: string[] = [];
 
@@ -279,8 +281,9 @@ export class ExportService {
       if (snap.error) {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
+        const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
         parts.push('```\n');
-        parts.push(snap.extractedContent);
+        parts.push(content);
         parts.push('\n```\n\n');
       }
     }
@@ -363,7 +366,7 @@ export class ExportService {
     }
 
     // Render output
-    const output = this.renderFolderMarkdown(folderName, snapshots, relativePaths, skippedReasons, totalSize);
+    const output = this.renderFolderMarkdown(folderName, snapshots, relativePaths, skippedReasons, totalSize, config);
     await vscode.env.clipboard.writeText(output);
 
     // Auto-generate entry name
@@ -421,7 +424,8 @@ export class ExportService {
     snapshots: CopiedFileSnapshot[],
     relativePaths: string[],
     skippedReasons: Map<string, string> = new Map(),
-    totalSize = 0
+    totalSize = 0,
+    config?: CopyConfig
   ): string {
     const parts: string[] = [];
 
@@ -450,8 +454,9 @@ export class ExportService {
       if (snap.error) {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
+        const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
         parts.push('```\n');
-        parts.push(snap.extractedContent);
+        parts.push(content);
         parts.push('\n```\n\n');
       }
     }
@@ -499,6 +504,7 @@ export class ExportService {
     group: Group,
     includePreprompt = true
   ): Promise<{ output: string; snapshots: CopiedFileSnapshot[] }> {
+    const config = await this.configRepo.get();
     const snapshots: CopiedFileSnapshot[] = [];
 
     // Gather file contents
@@ -537,13 +543,13 @@ export class ExportService {
 
     // Render output from snapshots
     const output = group.preprompt && includePreprompt
-      ? this.renderWithPreprompt(group, snapshots)
-      : this.renderMarkdown(group, snapshots);
+      ? this.renderWithPreprompt(group, snapshots, config)
+      : this.renderMarkdown(group, snapshots, config);
 
     return { output, snapshots };
   }
 
-  private renderMarkdown(group: Group, snapshots: CopiedFileSnapshot[]): string {
+  private renderMarkdown(group: Group, snapshots: CopiedFileSnapshot[], config?: CopyConfig): string {
     const parts: string[] = [];
 
     parts.push(`# Files from Group: ${group.name}\n`);
@@ -562,8 +568,9 @@ export class ExportService {
       if (snap.error) {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
+        const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
         parts.push('```\n');
-        parts.push(snap.extractedContent);
+        parts.push(content);
         parts.push('\n```\n\n');
       }
     }
@@ -571,14 +578,17 @@ export class ExportService {
     return parts.join('');
   }
 
-  private renderWithPreprompt(group: Group, snapshots: CopiedFileSnapshot[]): string {
+  private renderWithPreprompt(group: Group, snapshots: CopiedFileSnapshot[], config?: CopyConfig): string {
     if (!group.preprompt) {
-      return this.renderMarkdown(group, snapshots);
+      return this.renderMarkdown(group, snapshots, config);
     }
 
     const contextText = snapshots
       .filter(s => !s.error)
-      .map(s => `### ${s.relativePath}\n\`\`\`\n${s.extractedContent}\n\`\`\``)
+      .map(s => {
+        const content = config?.addLineNumbers ? addLineNumbers(s.extractedContent) : s.extractedContent;
+        return `### ${s.relativePath}\n\`\`\`\n${content}\n\`\`\``;
+      })
       .join('\n\n');
 
     const variables: Record<string, string> = {

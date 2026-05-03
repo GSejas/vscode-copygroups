@@ -21,6 +21,7 @@ export interface CopyConfig {
   showPreviewTree: boolean;       // Show expandable tree before confirming copy
   autoFavoriteSize: number;       // Entries with < N files auto-marked favorite
   skipBinaryFiles: boolean;       // Automatically skip .exe, .png, .bin, etc.
+  addLineNumbers: boolean;        // Prepend line numbers to extracted code (e.g., "001: ")
 }
 
 export const DEFAULT_COPY_CONFIG: CopyConfig = {
@@ -42,6 +43,7 @@ export const DEFAULT_COPY_CONFIG: CopyConfig = {
   showPreviewTree: true,
   autoFavoriteSize: 5,
   skipBinaryFiles: true,
+  addLineNumbers: true,
 };
 
 /**
@@ -60,5 +62,6 @@ export function validateCopyConfig(config: Partial<CopyConfig>): CopyConfig {
     showPreviewTree: config.showPreviewTree !== undefined ? config.showPreviewTree : defaults.showPreviewTree,
     autoFavoriteSize: Math.max(0, config.autoFavoriteSize || defaults.autoFavoriteSize),
     skipBinaryFiles: config.skipBinaryFiles !== undefined ? config.skipBinaryFiles : defaults.skipBinaryFiles,
+    addLineNumbers: config.addLineNumbers !== undefined ? config.addLineNumbers : defaults.addLineNumbers,
   };
 }
