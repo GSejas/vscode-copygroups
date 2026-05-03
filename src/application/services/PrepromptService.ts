@@ -10,7 +10,7 @@ export class PrepromptService {
 
   constructor() {
     // Initialize with system preprompts
-    for (const [key, preprompt] of Object.entries(SYSTEM_PREPROMPTS)) {
+    for (const preprompt of Object.values(SYSTEM_PREPROMPTS)) {
       this.customPreprompts.set(preprompt.id, preprompt);
     }
   }

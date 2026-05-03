@@ -5,7 +5,7 @@
 
 import { GroupEntity, Group } from '../../domain/entities/Group';
 import { IGroupRepository } from '../../domain/interfaces/IGroupRepository';
-import { FileReference, createFileReference } from '../../domain/valueObjects/FileReference';
+import { createFileReference } from '../../domain/valueObjects/FileReference';
 import { Tag } from '../../domain/valueObjects/Tag';
 import { ContextMode } from '../../domain/valueObjects/ContextMode';
 import { Preprompt } from '../../domain/entities/Preprompt';
@@ -150,7 +150,7 @@ export class GroupService {
     return allGroups.filter(g => g.isBookmarked).sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
-  async getRecentGroups(limit: number = 5): Promise<Group[]> {
+  async getRecentGroups(limit = 5): Promise<Group[]> {
     const allGroups = await this.repository.getAll();
     return allGroups
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())

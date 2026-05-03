@@ -52,7 +52,6 @@ export class PythonContextExtractor {
   extractSkeleton(content: string): string {
     const lines = content.split('\n');
     const result: string[] = [];
-    let indentLevel = 0;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];

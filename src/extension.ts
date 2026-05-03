@@ -14,7 +14,6 @@ import { GroupService } from './application/services/GroupService';
 import { ContextExtractionService } from './application/services/ContextExtractionService';
 import { ExportService } from './application/services/ExportService';
 import { CopyHistoryService } from './application/services/CopyHistoryService';
-import { PrepromptService } from './application/services/PrepromptService';
 
 // Presentation
 import { GroupTreeProvider, GroupItem } from './presentation/treeview/GroupTreeProvider';
@@ -35,7 +34,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const contextExtraction = new ContextExtractionService(fileProvider);
   const historyService = new CopyHistoryService(historyRepo);
   const exportService = new ExportService(contextExtraction, fileProvider, historyService);
-  const prepromptService = new PrepromptService();
 
   // ── Presentation ──────────────────────────────────────────────────────────
   const groupProvider = new GroupTreeProvider(groupService);
@@ -54,6 +52,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
 
   // ── Group commands ────────────────────────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.copySelectedFiles',
+      async (clickedFile: vscode.Uri, selectedFiles?: vscode.Uri[]) => {
+        // If user right-clicked one file but has multi-select, use selectedFiles
+        // Otherwise fallback to clickedFile
+        const files = selectedFiles && selectedFiles.length > 0 ? selectedFiles : [clickedFile];
+        
+        if (!files || files.length === 0) {
+          vscode.window.showErrorMessage('No files selected.');
+          return;
+        }
+
+        const fileUris = files.map(f => f.toString());
+        await exportService.copySelectedFiles(fileUris, { type: 'full' });
+        historyProvider.refresh();
+        vscode.window.showInformationMessage(`Copied ${files.length} file${files.length !== 1 ? 's' : ''} to clipboard.`);
+      }
+    )
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('copygroups.createGroup', async () => {
@@ -134,7 +153,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.showErrorMessage('Group not found.');
         return;
       }
-      await exportService.copyToClipboard(group);
+      await exportService.copyGroup(group);
       historyProvider.refresh();
       vscode.window.showInformationMessage(`Copied "${group.name}" to clipboard.`);
     })

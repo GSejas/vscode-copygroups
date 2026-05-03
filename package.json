@@ -62,6 +62,11 @@
         "icon": "$(clippy)"
       },
       {
+        "command": "copygroups.copySelectedFiles",
+        "title": "Copy Selected Files",
+        "icon": "$(files)"
+      },
+      {
         "command": "copygroups.deleteGroup",
         "title": "Copy Groups: Delete Group",
         "icon": "$(trash)"
@@ -136,8 +141,13 @@
       ],
       "explorer/context": [
         {
+          "command": "copygroups.copySelectedFiles",
+          "group": "1_modification@1",
+          "when": "resourceScheme == file && !explorerResourceIsFolder"
+        },
+        {
           "command": "copygroups.addToGroup",
-          "group": "1_modification",
+          "group": "1_modification@2",
           "when": "resourceScheme == file"
         }
       ],

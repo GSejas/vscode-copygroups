@@ -8,7 +8,7 @@
 
 import { ContextMode } from '../valueObjects/ContextMode';
 
-export type CopyTrigger = 'clipboard' | 'export-markdown' | 'export-json';
+export type CopyTrigger = 'clipboard' | 'export-markdown' | 'export-json' | 'direct-multi-file' | 'folder-contents';
 
 /**
  * A snapshot of a single file at copy time.

@@ -6,7 +6,8 @@
 
 import { ContextMode } from '../../domain/valueObjects/ContextMode';
 import { IFileContentProvider } from '../../domain/interfaces/IFileContentProvider';
-import { PythonContextExtractor } from './PythonContextExtractor';
+import { PythonContextExtractor } from '../extractors/PythonContextExtractor';
+import { error } from '../../utils/logger';
 
 export class ContextExtractionService {
   private pythonExtractor: PythonContextExtractor;
@@ -42,9 +43,9 @@ export class ContextExtractionService {
         default:
           return content;
       }
-    } catch (error) {
-      console.error(`Failed to extract context from ${fileUri}:`, error);
-      throw error;
+    } catch (err) {
+      error(`Failed to extract context from ${fileUri}`, err);
+      throw err;
     }
   }
 

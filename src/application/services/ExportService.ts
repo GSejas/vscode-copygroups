@@ -7,7 +7,8 @@
 
 import * as vscode from 'vscode';
 import { Group } from '../../domain/entities/Group';
-import { CopiedFileSnapshot, CopyTrigger } from '../../domain/entities/CopyHistoryEntry';
+import { CopiedFileSnapshot } from '../../domain/entities/CopyHistoryEntry';
+import { ContextMode } from '../../domain/valueObjects/ContextMode';
 import { ContextExtractionService } from './ContextExtractionService';
 import { CopyHistoryService } from './CopyHistoryService';
 import { IFileContentProvider } from '../../domain/interfaces/IFileContentProvider';
@@ -24,19 +25,110 @@ export class ExportService {
     private historyService: CopyHistoryService
   ) {}
 
-  // ─── Public entry points ─────────────────────────────────────────────────
+  /**
+   * Copy multiple selected files directly to clipboard without creating a group.
+   * Auto-generates a history entry name based on file count and timestamp.
+   */
+  async copySelectedFiles(
+    fileUris: string[],
+    contextMode: ContextMode = { type: 'full' }
+  ): Promise<void> {
+    const snapshots: CopiedFileSnapshot[] = [];
+    const relativePaths: string[] = [];
+
+    for (const fileUri of fileUris) {
+      try {
+        const exists = await this.fileProvider.fileExists(fileUri);
+        if (!exists) {
+          snapshots.push({
+            uri: fileUri,
+            relativePath: fileUri,
+            extractedContent: '',
+            contextMode,
+            error: 'File not found',
+          });
+          continue;
+        }
+
+        const relativePath = await this.fileProvider.getRelativePath(fileUri);
+        relativePaths.push(relativePath);
+        const extractedContent = await this.contextExtraction.extract(fileUri, contextMode);
+        snapshots.push({
+          uri: fileUri,
+          relativePath,
+          extractedContent,
+          contextMode,
+        });
+      } catch (err) {
+        snapshots.push({
+          uri: fileUri,
+          relativePath: fileUri,
+          extractedContent: '',
+          contextMode,
+          error: String(err),
+        });
+      }
+    }
+
+    // Render output
+    const output = this.renderMultiFileMarkdown(snapshots, relativePaths);
+    await vscode.env.clipboard.writeText(output);
+
+    // Auto-generate entry name
+    const timestamp = new Date().toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const successCount = snapshots.filter(s => !s.error).length;
+    const entryName = `${successCount} file${successCount !== 1 ? 's' : ''} • ${timestamp}`;
+
+    // Create a synthetic group-like object for history recording
+    const syntheticGroup: any = {
+      id: `direct-${Date.now()}`,
+      name: entryName,
+      contextMode,
+    };
+
+    await this.historyService.record(syntheticGroup, output, snapshots, 'direct-multi-file');
+  }
+
+  private renderMultiFileMarkdown(snapshots: CopiedFileSnapshot[], relativePaths: string[]): string {
+    const parts: string[] = [];
+
+    const successCount = snapshots.filter(s => !s.error).length;
+    parts.push(`# Multi-File Copy\n`);
+    parts.push(`Files: ${successCount} / ${snapshots.length}\n`);
+    parts.push(`Context Mode: \`${snapshots[0]?.contextMode.type || 'full'}\`\n`);
+    if (relativePaths.length > 0) {
+      parts.push(`\nIncluded:\n${relativePaths.map(p => `• \`${p}\``).join('\n')}\n`);
+    }
+    parts.push('\n---\n\n');
+
+    for (const snap of snapshots) {
+      parts.push(`## ${snap.relativePath}\n\n`);
+      if (snap.error) {
+        parts.push(`> ⚠️ ${snap.error}\n\n`);
+      } else {
+        parts.push('```\n');
+        parts.push(snap.extractedContent);
+        parts.push('\n```\n\n');
+      }
+    }
+
+    return parts.join('');
+  }
 
   /**
-   * Copy the group's formatted output to the clipboard and log the operation.
+   * Copy a group to clipboard and log the operation.
    */
-  async copyToClipboard(group: Group): Promise<void> {
+  async copyGroup(group: Group): Promise<void> {
     const { output, snapshots } = await this.buildOutput(group);
     await vscode.env.clipboard.writeText(output);
     await this.historyService.record(group, output, snapshots, 'clipboard');
   }
 
   /**
-   * Export to Markdown string and log as an export operation.
+   * Wipes non-favourite entries. Favourited entries are preserved.
    */
   async exportToMarkdown(group: Group, options: ExportOptions = {}): Promise<string> {
     const { output, snapshots } = await this.buildOutput(group, options.includePreprompt);
