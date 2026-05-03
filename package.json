@@ -67,11 +67,18 @@
         "title": "Copy Selected Files",
         "icon": "$(files)"
       },
-      {        "command": "copygroups.copyFolder",
+      {
+        "command": "copygroups.copyFolder",
         "title": "Copy Folder Contents",
         "icon": "$(folder-opened)"
       },
-      {        "command": "copygroups.deleteGroup",
+      {
+        "command": "copygroups.copyContext",
+        "title": "Copy Context",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "copygroups.deleteGroup",
         "title": "Copy Groups: Delete Group",
         "icon": "$(trash)"
       },
@@ -106,6 +113,10 @@
         "command": "copygroups.history.delete",
         "title": "Delete Entry",
         "icon": "$(trash)"
+      },
+      {
+        "command": "copygroups.history.modifyMode",
+        "title": "Change Context Mode"
       },
       {
         "command": "copygroups.history.clear",
@@ -145,14 +156,9 @@
       ],
       "explorer/context": [
         {
-          "command": "copygroups.copySelectedFiles",
+          "command": "copygroups.copyContext",
           "group": "1_modification@1",
-          "when": "resourceScheme == file && !explorerResourceIsFolder"
-        },
-        {
-          "command": "copygroups.copyFolder",
-          "group": "1_modification@1",
-          "when": "resourceScheme == file && explorerResourceIsFolder"
+          "when": "resourceScheme == file"
         },
         {
           "command": "copygroups.addToGroup",
@@ -205,6 +211,11 @@
           "command": "copygroups.history.addNote",
           "when": "view == copygroups.history && viewItem == historyEntry",
           "group": "2_meta@1"
+        },
+        {
+          "command": "copygroups.history.modifyMode",
+          "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "2_meta@2"
         },
         {
           "command": "copygroups.history.delete",

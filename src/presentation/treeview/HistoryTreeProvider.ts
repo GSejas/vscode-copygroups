@@ -3,15 +3,16 @@
  *
  * Renders the Copy History sidebar. Top level shows recent / favourites.
  * Each entry shows: group name, time, file count, and favourite star.
+ * Entries are expandable to show individual files.
  * Right-click context menu (wired via package.json menus) gives:
- *   – Re-copy, Toggle Favourite, Add Note, Delete
+ *   – Re-copy, Toggle Favourite, Add Note, Delete, Add Files, Remove File, Modify Mode
  */
 
 import * as vscode from 'vscode';
 import { CopyHistoryEntry } from '../../domain/entities/CopyHistoryEntry';
 import { CopyHistoryService } from '../../application/services/CopyHistoryService';
 
-type HistoryTreeNode = SectionItem | HistoryItem;
+type HistoryTreeNode = SectionItem | HistoryItem | FileItem;
 
 // ─── Tree items ──────────────────────────────────────────────────────────────
 
@@ -26,9 +27,27 @@ class SectionItem extends vscode.TreeItem {
   }
 }
 
+/**
+ * File item within a history entry
+ */
+export class FileItem extends vscode.TreeItem {
+  constructor(
+    public readonly fileName: string,
+    public readonly filePath: string,
+    public readonly hasError: boolean
+  ) {
+    super(fileName, vscode.TreeItemCollapsibleState.None);
+    this.description = filePath;
+    this.iconPath = hasError
+      ? new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'))
+      : new vscode.ThemeIcon('file');
+    this.contextValue = 'fileItem';
+  }
+}
+
 export class HistoryItem extends vscode.TreeItem {
   constructor(public readonly entry: CopyHistoryEntry) {
-    super(entry.groupName, vscode.TreeItemCollapsibleState.None);
+    super(entry.groupName, vscode.TreeItemCollapsibleState.Collapsed);
 
     const timeAgo = formatTimeAgo(entry.copiedAt);
     const fileCount = entry.files.length;
@@ -95,7 +114,7 @@ export class HistoryTreeProvider implements vscode.TreeDataProvider<HistoryTreeN
       ];
     }
 
-    // Section children
+    // Section children: history entries
     if (element instanceof SectionItem) {
       if (element.sectionKey === 'favourites') {
         const favs = await this.historyService.getFavourites();
@@ -108,6 +127,14 @@ export class HistoryTreeProvider implements vscode.TreeDataProvider<HistoryTreeN
           .slice(0, 50)
           .map(e => new HistoryItem(e));
       }
+    }
+
+    // History entry children: files in the entry
+    if (element instanceof HistoryItem) {
+      return element.entry.files.map(f => {
+        const fileName = f.relativePath.split(/[\\/]/).pop() || f.relativePath;
+        return new FileItem(fileName, f.relativePath, !!f.error);
+      });
     }
 
     return [];

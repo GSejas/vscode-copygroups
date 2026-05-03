@@ -16,6 +16,9 @@ import { ContextExtractionService } from './application/services/ContextExtracti
 import { ExportService } from './application/services/ExportService';
 import { CopyHistoryService } from './application/services/CopyHistoryService';
 
+// Domain
+import { ContextModeType } from './domain/valueObjects/ContextMode';
+
 // Presentation
 import { GroupTreeProvider, GroupItem } from './presentation/treeview/GroupTreeProvider';
 import { HistoryTreeProvider, HistoryItem } from './presentation/treeview/HistoryTreeProvider';
@@ -94,6 +97,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           vscode.window.showInformationMessage(`Copied folder "${folderName}" to clipboard.`);
         } catch (err) {
           vscode.window.showErrorMessage(`Failed to copy folder: ${err}`);
+        }
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.copyContext',
+      async (clickedItem: vscode.Uri, selectedItems?: vscode.Uri[]) => {
+        try {
+          const items = selectedItems && selectedItems.length > 0 ? selectedItems : [clickedItem];
+          if (!items || items.length === 0) {
+            vscode.window.showErrorMessage('No files or folders selected.');
+            return;
+          }
+
+          await exportService.copyContext(items);
+          historyProvider.refresh();
+          
+          if (items.length === 1) {
+            const name = items[0].fsPath.split(/[\\/]/).pop() || 'item';
+            vscode.window.showInformationMessage(`Copied "${name}" to clipboard.`);
+          } else {
+            vscode.window.showInformationMessage(`Copied ${items.length} items to clipboard.`);
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to copy context: ${String(err)}`);
         }
       }
     )
@@ -310,6 +340,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (confirm !== 'Delete') return;
         await historyService.delete(id);
         historyProvider.refresh();
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.history.modifyMode',
+      async (item: HistoryItem | string) => {
+        const id = item instanceof HistoryItem ? item.entry.id : item;
+        const entries = await historyService.getAll();
+        const entry = entries.find(e => e.id === id);
+        if (!entry) {
+          vscode.window.showErrorMessage('Entry not found.');
+          return;
+        }
+
+        const modes = ['full', 'docstring', 'skeleton', 'headers', 'head-tail', 'smart'];
+        const selected = await vscode.window.showQuickPick(modes, {
+          placeHolder: `Current mode: ${entry.contextMode.type}`,
+        });
+
+        if (!selected || selected === entry.contextMode.type) return;
+
+        // Re-extract all files with new mode and copy as new entry
+        const newMode = { type: selected as ContextModeType };
+        try {
+          await exportService.copyContext(
+            entry.files
+              .filter(f => !f.error)
+              .map(f => vscode.Uri.parse(f.uri)),
+            newMode
+          );
+          historyProvider.refresh();
+          vscode.window.showInformationMessage(`Re-copied with mode: ${selected}`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to re-copy with new mode: ${String(err)}`);
+        }
       }
     )
   );

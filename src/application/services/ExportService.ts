@@ -8,7 +8,7 @@
 import * as vscode from 'vscode';
 import { Group } from '../../domain/entities/Group';
 import { CopiedFileSnapshot } from '../../domain/entities/CopyHistoryEntry';
-import { ContextMode } from '../../domain/valueObjects/ContextMode';
+import { ContextMode, ContextModeType } from '../../domain/valueObjects/ContextMode';
 import { CopyConfig } from '../../domain/valueObjects/CopyConfig';
 import { ContextExtractionService } from './ContextExtractionService';
 import { CopyHistoryService } from './CopyHistoryService';
@@ -107,6 +107,48 @@ export class ExportService {
         size: 0,
         withinLimit: true,
       };
+    }
+  }
+
+  /**
+   * Unified copy context entry point.
+   * Intelligently handles files, folders, or multi-file selections.
+   * - Single file → extract with config limits
+   * - Folder → recursive scan with config.maxDirectoryDepth
+   * - Multiple files → direct multi-file copy
+   */
+  async copyContext(
+    uris: vscode.Uri[],
+    contextMode?: ContextMode
+  ): Promise<void> {
+    if (!uris || uris.length === 0) {
+      throw new Error('No files or folders selected');
+    }
+
+    const config = await this.configRepo.get();
+    const mode: ContextMode = contextMode || { type: config.defaultContextMode as ContextModeType };
+
+    // Single item: check if file or folder
+    if (uris.length === 1) {
+      const uri = uris[0];
+      try {
+        const stat = await vscode.workspace.fs.stat(uri);
+        if (stat.type === vscode.FileType.Directory) {
+          // It's a folder
+          await this.copyFolder(uri.toString(), mode);
+        } else {
+          // Single file: wrap in array and copy as multi-file
+          await this.copySelectedFiles([uri.toString()], mode);
+        }
+      } catch (err) {
+        throw new Error(`Cannot access item: ${String(err)}`);
+      }
+    } else {
+      // Multiple items: copy all as multi-file
+      await this.copySelectedFiles(
+        uris.map(uri => uri.toString()),
+        mode
+      );
     }
   }
 
