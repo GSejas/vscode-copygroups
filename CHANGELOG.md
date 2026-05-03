@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.3] — 2026-05-03
+
+### Fixed
+- **Global state persistence bug** — CopyHistoryRepository was calling `.update()` on `this.workspaceState` instead of `this.globalState`, causing "Cannot read properties of undefined (reading 'update')" errors. This prevented copy history from being persisted across VS Code instances. Bug fix ensures all repositories now consistently use globalState for cross-instance syncing.
+
 ## [0.1.1] — 2026-05-03
 
 ### Added

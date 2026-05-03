@@ -101,6 +101,6 @@ export class CopyHistoryRepository implements ICopyHistoryRepository {
       ...e,
       copiedAt: e.copiedAt.toISOString(),
     }));
-    await this.workspaceState.update(STORAGE_KEY, data);
+    await this.globalState.update(STORAGE_KEY, data);
   }
 }

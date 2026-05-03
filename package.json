@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {

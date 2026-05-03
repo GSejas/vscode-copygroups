@@ -1,4 +1,4 @@
-# Copy Groups
+*# Copy Groups
 
 **Copy Groups** is a VS Code extension that prepares code context for AI assistants in one click. Organise files into named groups, control exactly how much code is extracted, attach prompt templates, and copy everything to your clipboard — ready for ChatGPT, Claude, or any LLM.
 
@@ -34,7 +34,7 @@ Right-click a group → **Set Preprompt** to choose from built-in templates:
 - Security Review
 - Architecture Analysis
 - Performance Optimization
-- Documentation Generation
+**- Documentation Generation
 
 ### Quick Copy (no groups needed)
 - Right-click files in the explorer → **Copy Context** — copies selected files instantly
@@ -135,3 +135,4 @@ All settings live under `copygroups.*` and can be edited in VS Code's **Settings
 ## License
 
 MIT — see [LICENSE](LICENSE)
+*
