@@ -75,6 +75,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.copyFolder',
+      async (folderUri: vscode.Uri) => {
+        if (!folderUri) {
+          vscode.window.showErrorMessage('No folder selected.');
+          return;
+        }
+
+        try {
+          await exportService.copyFolder(folderUri.toString(), { type: 'skeleton' });
+          historyProvider.refresh();
+          const folderName = folderUri.fsPath.split(/[\\/]/).pop();
+          vscode.window.showInformationMessage(`Copied folder "${folderName}" to clipboard.`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to copy folder: ${err}`);
+        }
+      }
+    )
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('copygroups.createGroup', async () => {
       const name = await vscode.window.showInputBox({
         prompt: 'Group name',

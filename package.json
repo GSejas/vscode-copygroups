@@ -66,8 +66,11 @@
         "title": "Copy Selected Files",
         "icon": "$(files)"
       },
-      {
-        "command": "copygroups.deleteGroup",
+      {        "command": "copygroups.copyFolder",
+        "title": "Copy Folder Contents",
+        "icon": "$(folder-opened)"
+      },
+      {        "command": "copygroups.deleteGroup",
         "title": "Copy Groups: Delete Group",
         "icon": "$(trash)"
       },
@@ -144,6 +147,11 @@
           "command": "copygroups.copySelectedFiles",
           "group": "1_modification@1",
           "when": "resourceScheme == file && !explorerResourceIsFolder"
+        },
+        {
+          "command": "copygroups.copyFolder",
+          "group": "1_modification@1",
+          "when": "resourceScheme == file && explorerResourceIsFolder"
         },
         {
           "command": "copygroups.addToGroup",

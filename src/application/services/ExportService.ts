@@ -119,6 +119,129 @@ export class ExportService {
   }
 
   /**
+   * Copy all files in a folder recursively to clipboard.
+   * Auto-generates history entry name: "folder-name (N files)"
+   */
+  async copyFolder(
+    folderUri: string,
+    contextMode: ContextMode = { type: 'skeleton' },
+    maxDepth = 10
+  ): Promise<void> {
+    const folderVsCodeUri = vscode.Uri.parse(folderUri);
+    const folderName = folderVsCodeUri.fsPath.split(/[\\/]/).pop() || 'folder';
+
+    const fileUris: string[] = [];
+    await this.walkDirectory(folderVsCodeUri, fileUris, maxDepth, 0);
+
+    if (fileUris.length === 0) {
+      throw new Error('No files found in folder');
+    }
+
+    const snapshots: CopiedFileSnapshot[] = [];
+    const relativePaths: string[] = [];
+
+    for (const fileUri of fileUris) {
+      try {
+        const exists = await this.fileProvider.fileExists(fileUri);
+        if (!exists) continue;
+
+        const relativePath = await this.fileProvider.getRelativePath(fileUri);
+        relativePaths.push(relativePath);
+        const extractedContent = await this.contextExtraction.extract(fileUri, contextMode);
+        snapshots.push({
+          uri: fileUri,
+          relativePath,
+          extractedContent,
+          contextMode,
+        });
+      } catch (err) {
+        snapshots.push({
+          uri: fileUri,
+          relativePath: fileUri,
+          extractedContent: '',
+          contextMode,
+          error: String(err),
+        });
+      }
+    }
+
+    // Render output
+    const output = this.renderFolderMarkdown(folderName, snapshots, relativePaths);
+    await vscode.env.clipboard.writeText(output);
+
+    // Auto-generate entry name
+    const successCount = snapshots.filter(s => !s.error).length;
+    const entryName = `${folderName} (${successCount} file${successCount !== 1 ? 's' : ''})`;
+
+    const syntheticGroup: any = {
+      id: `folder-${Date.now()}`,
+      name: entryName,
+      contextMode,
+    };
+
+    await this.historyService.record(syntheticGroup, output, snapshots, 'folder-contents');
+  }
+
+  private async walkDirectory(
+    dirUri: vscode.Uri,
+    fileUris: string[],
+    maxDepth: number,
+    currentDepth: number
+  ): Promise<void> {
+    if (currentDepth >= maxDepth) return;
+
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(dirUri);
+      for (const [name, type] of entries) {
+        // Skip hidden files and common ignore patterns
+        if (name.startsWith('.') || name === 'node_modules') {
+          continue;
+        }
+
+        const childUri = vscode.Uri.joinPath(dirUri, name);
+
+        if (type === vscode.FileType.File) {
+          fileUris.push(childUri.toString());
+        } else if (type === vscode.FileType.Directory) {
+          await this.walkDirectory(childUri, fileUris, maxDepth, currentDepth + 1);
+        }
+      }
+    } catch (err) {
+      // Skip inaccessible directories
+    }
+  }
+
+  private renderFolderMarkdown(
+    folderName: string,
+    snapshots: CopiedFileSnapshot[],
+    relativePaths: string[]
+  ): string {
+    const parts: string[] = [];
+
+    const successCount = snapshots.filter(s => !s.error).length;
+    parts.push(`# Folder: ${folderName}\n`);
+    parts.push(`Files: ${successCount} / ${snapshots.length}\n`);
+    parts.push(`Context Mode: \`${snapshots[0]?.contextMode.type || 'skeleton'}\`\n`);
+    if (relativePaths.length > 0) {
+      parts.push(`\nIncluded:\n${relativePaths.map(p => `• \`${p}\``).join('\n')}\n`);
+    }
+    parts.push('\n---\n\n');
+
+    for (const snap of snapshots) {
+      parts.push(`## ${snap.relativePath}\n\n`);
+      if (snap.error) {
+        parts.push(`> ⚠️ ${snap.error}\n\n`);
+      } else {
+        parts.push('```\n');
+        parts.push(snap.extractedContent);
+        parts.push('\n```\n\n');
+      }
+    }
+
+    return parts.join('');
+  }
+
+  /**
    * Copy a group to clipboard and log the operation.
    */
   async copyGroup(group: Group): Promise<void> {
