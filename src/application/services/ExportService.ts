@@ -155,7 +155,7 @@ export class ExportService {
     const { snapshots, relativePaths, skippedReasons, totalSize } =
       await this.processFiles(fileUris, contextMode, config);
 
-    const output = this.renderMultiFileMarkdown(snapshots, relativePaths, skippedReasons, totalSize, config);
+    const output = await this.renderMultiFileMarkdown(snapshots, relativePaths, skippedReasons, totalSize, contextMode, fileUris, config);
     await vscode.env.clipboard.writeText(output);
 
     const successCount = snapshots.filter(s => !s.error).length;
@@ -213,6 +213,145 @@ export class ExportService {
     const { output, snapshots } = await this.buildOutput(group, options.includePreprompt);
     await this.historyService.record(group, output, snapshots, 'export-markdown');
     return output;
+  }
+
+  // ─── Tree / neighbor helpers ──────────────────────────────────────────────
+
+  private async renderTreeSection(config: CopyConfig): Promise<string> {
+    if (!config.includeFileTree) return '';
+    const tree = await this.buildProjectTree(config);
+    if (!tree) return '';
+    return `## Project Structure\n\n\`\`\`\n${tree}\n\`\`\`\n\n`;
+  }
+
+  private async renderNeighborSection(fileUris: string[], contextMode: ContextMode, config: CopyConfig): Promise<string> {
+    if (!config.includeNeighborFiles) return '';
+    const neighborMap = await this.getNeighborFiles(fileUris, config);
+    if (neighborMap.size === 0) return '';
+
+    const parts: string[] = ['## Neighboring Files\n'];
+    for (const [dirPath, neighbors] of neighborMap) {
+      parts.push(`\n### ${dirPath}/\n`);
+      if (config.neighborFileMode === 'content') {
+        for (const neighborUri of neighbors) {
+          const relPath = await this.fileProvider.getRelativePath(neighborUri);
+          try {
+            const content = await this.contextExtraction.extract(neighborUri, contextMode);
+            const lang = getLanguageTag(relPath);
+            const body = config.addLineNumbers ? addLineNumbers(content) : content;
+            parts.push(`\`\`\`${lang}\n// ${relPath}\n${body}\n\`\`\`\n\n`);
+          } catch {
+            parts.push(`• \`${relPath}\` _(unreadable)_\n`);
+          }
+        }
+      } else {
+        for (const neighborUri of neighbors) {
+          const relPath = await this.fileProvider.getRelativePath(neighborUri);
+          const filename = relPath.split(/[/\\]/).pop() || relPath;
+          parts.push(`• \`${filename}\`\n`);
+        }
+      }
+    }
+    return parts.join('') + '\n';
+  }
+
+  private async buildProjectTree(config: CopyConfig): Promise<string> {
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!root) return '';
+    const rootName = root.fsPath.split(/[/\\]/).pop() || 'workspace';
+    const matcher = new PatternMatcher([], config.excludePatterns);
+    const lines: string[] = [`${rootName}/`];
+    await this.buildTreeLines(root, '', config.fileTreeDepth, 0, matcher, lines);
+    return lines.join('\n');
+  }
+
+  private async buildTreeLines(
+    dirUri: vscode.Uri,
+    prefix: string,
+    maxDepth: number,
+    currentDepth: number,
+    matcher: PatternMatcher,
+    lines: string[]
+  ): Promise<void> {
+    if (currentDepth >= maxDepth) return;
+    let entries: [string, vscode.FileType][];
+    try {
+      entries = await vscode.workspace.fs.readDirectory(dirUri);
+    } catch {
+      return;
+    }
+    // Filter hidden and pattern-excluded entries
+    const visible = entries.filter(([name]) => !name.startsWith('.'));
+    const filtered: [string, vscode.FileType][] = [];
+    for (const [name, type] of visible) {
+      const childUri = vscode.Uri.joinPath(dirUri, name);
+      const relPath = await this.fileProvider.getRelativePath(childUri.toString());
+      if (matcher.shouldInclude(relPath)) {
+        filtered.push([name, type]);
+      }
+    }
+    // Sort: dirs first, then files
+    filtered.sort(([a, at], [b, bt]) => {
+      if (at === vscode.FileType.Directory && bt !== vscode.FileType.Directory) return -1;
+      if (at !== vscode.FileType.Directory && bt === vscode.FileType.Directory) return 1;
+      return a.localeCompare(b);
+    });
+    for (let i = 0; i < filtered.length; i++) {
+      const [name, type] = filtered[i];
+      const isLast = i === filtered.length - 1;
+      const connector = isLast ? '└── ' : '├── ';
+      const childPrefix = prefix + (isLast ? '    ' : '│   ');
+      if (type === vscode.FileType.Directory) {
+        lines.push(`${prefix}${connector}${name}/`);
+        await this.buildTreeLines(
+          vscode.Uri.joinPath(dirUri, name),
+          childPrefix,
+          maxDepth,
+          currentDepth + 1,
+          matcher,
+          lines
+        );
+      } else {
+        lines.push(`${prefix}${connector}${name}`);
+      }
+    }
+  }
+
+  private async getNeighborFiles(fileUris: string[], config: CopyConfig): Promise<Map<string, string[]>> {
+    const copiedSet = new Set(fileUris);
+    // Group by parent directory URI string
+    const byDir = new Map<string, string[]>();
+    for (const uri of fileUris) {
+      const vsUri = vscode.Uri.parse(uri);
+      const parentUri = vscode.Uri.joinPath(vsUri, '..').toString();
+      if (!byDir.has(parentUri)) byDir.set(parentUri, []);
+    }
+
+    const result = new Map<string, string[]>();
+    for (const [parentUriStr] of byDir) {
+      const parentUri = vscode.Uri.parse(parentUriStr);
+      let entries: [string, vscode.FileType][];
+      try {
+        entries = await vscode.workspace.fs.readDirectory(parentUri);
+      } catch {
+        continue;
+      }
+      const neighbors: string[] = [];
+      for (const [name, type] of entries) {
+        if (type !== vscode.FileType.File) continue;
+        if (name.startsWith('.')) continue;
+        const childUri = vscode.Uri.joinPath(parentUri, name);
+        const childUriStr = childUri.toString();
+        if (copiedSet.has(childUriStr)) continue;
+        if (config.skipBinaryFiles && isBinaryFile(name)) continue;
+        neighbors.push(childUriStr);
+      }
+      if (neighbors.length > 0) {
+        const dirRelPath = await this.fileProvider.getRelativePath(parentUri.toString());
+        result.set(dirRelPath, neighbors);
+      }
+    }
+    return result;
   }
 
   /**
@@ -293,14 +432,18 @@ export class ExportService {
     return parts.join('');
   }
 
-  private renderMultiFileMarkdown(
+  private async renderMultiFileMarkdown(
     snapshots: CopiedFileSnapshot[],
     relativePaths: string[],
     skippedReasons: Map<string, string>,
     totalSize: number,
-    config?: CopyConfig
-  ): string {
+    contextMode: ContextMode,
+    fileUris: string[],
+    config: CopyConfig
+  ): Promise<string> {
     const parts: string[] = [];
+
+    parts.push(await this.renderTreeSection(config));
 
     const successCount = snapshots.filter(s => !s.error).length;
     parts.push(`# Multi-File Copy\n`);
@@ -328,12 +471,14 @@ export class ExportService {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
         const lang = getLanguageTag(snap.relativePath);
-        const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
+        const content = config.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
         parts.push(`\`\`\`${lang}\n`);
         parts.push(content);
         parts.push('\n```\n\n');
       }
     }
+
+    parts.push(await this.renderNeighborSection(fileUris, contextMode, config));
 
     return parts.join('');
   }

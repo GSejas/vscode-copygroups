@@ -40,6 +40,14 @@ Right-click a group → **Set Preprompt** to choose from built-in templates:
 - Right-click files in the explorer → **Copy Context** — copies selected files instantly
 - Right-click a folder → **Copy Context** — recursively copies all files in the folder
 
+### Project Tree & Neighbor Context
+Give the LLM more awareness of what surrounds the code you copy.
+
+- **Project file tree** — when enabled, an ASCII directory tree is prepended to every copy, showing the overall project layout
+- **Neighbor files** — when enabled, each directory's un-copied siblings are listed (or included with extracted content) after the main file sections
+
+Both are off by default and controlled via VS Code settings (see [Configuration](#configuration)).
+
 ### Copy History
 Every copy is recorded in the *Copy History* panel. Re-copy, favourite, annotate, or delete past operations. Right-click a history entry to re-extract with a different context mode.
 
@@ -98,17 +106,29 @@ export class AuthService {
 
 ## Configuration
 
-Copy Groups respects workspace-level limits to keep clipboard output manageable. Defaults work out of the box — no setup required.
+All settings live under `copygroups.*` and can be edited in VS Code's **Settings UI** (`Ctrl+,`) or directly in `settings.json`. Defaults work out of the box — no setup required.
+
+### Output enrichment
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Max files per copy | 100 | Hard cap on number of files |
-| Max total size | 5 MB | Stop adding files after this |
-| Max file size | 1 MB | Skip individual files larger than this |
-| Max folder depth | 10 | Recursion depth for folder copy |
-| Skip binary files | `true` | Ignore `.exe`, `.png`, etc. |
-| Add line numbers | `true` | Prefix each line with a number |
-| Exclude patterns | `node_modules/**`, `dist/**`, `.git/**`, … | Glob patterns to skip |
+| `copygroups.includeFileTree` | `false` | Prepend an ASCII project tree to the copied output |
+| `copygroups.fileTreeDepth` | `3` | How many directory levels to show in the tree (1–10) |
+| `copygroups.includeNeighborFiles` | `false` | Append sibling files (not copied) for each directory |
+| `copygroups.neighborFileMode` | `"names"` | `"names"` — list filenames only; `"content"` — include extracted code |
+
+### Limits & filtering
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `copygroups.maxFileCount` | `100` | Hard cap on number of files per copy |
+| `copygroups.maxTotalSizeBytes` | `5242880` | Stop adding files after this total (5 MB) |
+| `copygroups.maxFileSizeBytes` | `1048576` | Skip individual files larger than this (1 MB) |
+| `copygroups.maxDirectoryDepth` | `10` | Recursion depth for folder copy |
+| `copygroups.skipBinaryFiles` | `true` | Ignore `.exe`, `.png`, etc. |
+| `copygroups.addLineNumbers` | `true` | Prefix each line with a line number |
+| `copygroups.excludePatterns` | `["node_modules/**", "dist/**", ".git/**", …]` | Glob patterns to skip |
+| `copygroups.includePatterns` | `[]` | Glob allowlist — empty means include everything |
 
 ---
 

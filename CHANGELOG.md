@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1] — 2026-05-03
+
+### Added
+- **Project file tree** — optionally prepend an ASCII directory tree (from workspace root) to every copied output, so the LLM sees overall project structure at a glance. Enable with `copygroups.includeFileTree`; control depth with `copygroups.fileTreeDepth` (default 3)
+- **Neighbor files** — optionally append a list (or full extracted content) of sibling files in the same directory that were not part of the copy. Enable with `copygroups.includeNeighborFiles`; set `copygroups.neighborFileMode` to `names` (list only) or `content` (include extracted code)
+- **VS Code settings integration** — all configuration options are now exposed as proper workspace settings under `copygroups.*`, editable in VS Code's Settings UI or `settings.json`
+
 ## [0.1.0] — 2026-05-03
 
 ### Added

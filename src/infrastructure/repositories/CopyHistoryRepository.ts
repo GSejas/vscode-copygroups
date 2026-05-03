@@ -14,11 +14,11 @@ const MAX_ENTRIES = 200;
 export class CopyHistoryRepository implements ICopyHistoryRepository {
   private entries: Map<string, CopyHistoryEntry> = new Map();
 
-  constructor(private workspaceState: vscode.Memento) {}
+  constructor(private globalState: vscode.Memento) {}
 
   async initialize(): Promise<void> {
     try {
-      const stored = this.workspaceState.get<any[]>(STORAGE_KEY, []);
+      const stored = this.globalState.get<any[]>(STORAGE_KEY, []);
       for (const raw of stored) {
         const entry: CopyHistoryEntry = {
           ...raw,

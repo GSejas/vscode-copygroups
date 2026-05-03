@@ -9,7 +9,7 @@ import { CopyConfig, DEFAULT_COPY_CONFIG, validateCopyConfig } from '../../domai
 const CONFIG_KEY = 'copygroups.config';
 
 export class ConfigRepository {
-  constructor(private workspaceState: vscode.Memento) {}
+  constructor(private globalState: vscode.Memento) {}
 
   /**
    * Initialize config repository - loads or creates default config
@@ -22,14 +22,26 @@ export class ConfigRepository {
   }
 
   /**
-   * Get current copy configuration
+   * Get current copy configuration.
+   * VS Code workspace settings (copygroups.*) take precedence over stored state.
    */
   async get(): Promise<CopyConfig> {
-    const stored = this.workspaceState.get<Partial<CopyConfig>>(CONFIG_KEY);
-    if (!stored) {
-      return DEFAULT_COPY_CONFIG;
+    const stored = this.globalState.get<Partial<CopyConfig>>(CONFIG_KEY) || {};
+    const ws = vscode.workspace.getConfiguration('copygroups');
+    const fromSettings: Partial<CopyConfig> = {};
+    const keys: (keyof CopyConfig)[] = [
+      'defaultContextMode', 'maxFileCount', 'maxTotalSizeBytes', 'maxFileSizeBytes',
+      'maxDirectoryDepth', 'includePatterns', 'excludePatterns', 'skipBinaryFiles',
+      'addLineNumbers', 'includeFileTree', 'fileTreeDepth', 'includeNeighborFiles',
+      'neighborFileMode',
+    ];
+    for (const key of keys) {
+      const val = ws.get(key);
+      if (val !== undefined) {
+        (fromSettings as Record<string, unknown>)[key] = val;
+      }
     }
-    return validateCopyConfig(stored);
+    return validateCopyConfig({ ...stored, ...fromSettings });
   }
 
   /**
@@ -39,14 +51,14 @@ export class ConfigRepository {
     const current = await this.get();
     const merged = { ...current, ...config };
     const validated = validateCopyConfig(merged);
-    this.workspaceState.update(CONFIG_KEY, validated);
+    await this.globalState.update(CONFIG_KEY, validated);
   }
 
   /**
    * Reset to defaults
    */
   async reset(): Promise<void> {
-    this.workspaceState.update(CONFIG_KEY, DEFAULT_COPY_CONFIG);
+    await this.globalState.update(CONFIG_KEY, DEFAULT_COPY_CONFIG);
   }
 
   /**

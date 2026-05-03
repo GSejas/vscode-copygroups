@@ -28,13 +28,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ── Infrastructure ────────────────────────────────────────────────────────
   const fileProvider = new VSCodeFileProvider();
 
-  const groupRepo = new GroupRepository(context.workspaceState);
+  // Enable global state syncing across VS Code instances and machines
+  context.globalState.setKeysForSync(['copygroups.groups', 'copygroups.history', 'copygroups.config']);
+
+  const groupRepo = new GroupRepository(context.globalState);
   await groupRepo.initialize();
 
-  const historyRepo = new CopyHistoryRepository(context.workspaceState);
+  const historyRepo = new CopyHistoryRepository(context.globalState);
   await historyRepo.initialize();
 
-  const configRepo = new ConfigRepository(context.workspaceState);
+  const configRepo = new ConfigRepository(context.globalState);
   await configRepo.initialize();
 
   // ── Application ───────────────────────────────────────────────────────────

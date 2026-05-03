@@ -11,11 +11,11 @@ export class GroupRepository implements IGroupRepository {
   private groups: Map<string, Group> = new Map();
   private readonly storageKey = 'copygroups.groups';
 
-  constructor(private workspaceState: vscode.Memento) {}
+  constructor(private globalState: vscode.Memento) {}
 
   async initialize(): Promise<void> {
     try {
-      const stored = this.workspaceState.get<any>(this.storageKey);
+      const stored = this.globalState.get<any>(this.storageKey);
       if (stored && Array.isArray(stored)) {
         for (const groupData of stored) {
           // Reconstruct dates from ISO strings
@@ -76,7 +76,7 @@ export class GroupRepository implements IGroupRepository {
         updatedAt: group.updatedAt.toISOString(),
       }));
 
-      await this.workspaceState.update(this.storageKey, data);
+      await this.globalState.update(this.storageKey, data);
     } catch (error) {
       console.error('Failed to persist groups to storage:', error);
       throw error;

@@ -20,6 +20,14 @@ export interface CopyConfig {
   // UI/UX preferences
   skipBinaryFiles: boolean;       // Automatically skip .exe, .png, .bin, etc.
   addLineNumbers: boolean;        // Prepend line numbers to extracted code (e.g., "001: ")
+
+  // Project tree
+  includeFileTree: boolean;       // Prepend an ASCII project tree to the copied output
+  fileTreeDepth: number;          // How many directory levels to show in the tree
+
+  // Neighbor files
+  includeNeighborFiles: boolean;  // Append sibling files (not copied) per directory
+  neighborFileMode: 'names' | 'content'; // 'names' = list only; 'content' = include extracted code
 }
 
 export const DEFAULT_COPY_CONFIG: CopyConfig = {
@@ -40,6 +48,10 @@ export const DEFAULT_COPY_CONFIG: CopyConfig = {
   ],
   skipBinaryFiles: true,
   addLineNumbers: true,
+  includeFileTree: false,
+  fileTreeDepth: 3,
+  includeNeighborFiles: false,
+  neighborFileMode: 'names',
 };
 
 /**
@@ -57,5 +69,9 @@ export function validateCopyConfig(config: Partial<CopyConfig>): CopyConfig {
     excludePatterns: config.excludePatterns || defaults.excludePatterns,
     skipBinaryFiles: config.skipBinaryFiles !== undefined ? config.skipBinaryFiles : defaults.skipBinaryFiles,
     addLineNumbers: config.addLineNumbers !== undefined ? config.addLineNumbers : defaults.addLineNumbers,
+    includeFileTree: config.includeFileTree !== undefined ? config.includeFileTree : defaults.includeFileTree,
+    fileTreeDepth: Math.min(10, Math.max(1, config.fileTreeDepth || defaults.fileTreeDepth)),
+    includeNeighborFiles: config.includeNeighborFiles !== undefined ? config.includeNeighborFiles : defaults.includeNeighborFiles,
+    neighborFileMode: config.neighborFileMode || defaults.neighborFileMode,
   };
 }
