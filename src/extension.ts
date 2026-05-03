@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 // Infrastructure
 import { GroupRepository } from './infrastructure/repositories/GroupRepository';
 import { CopyHistoryRepository } from './infrastructure/repositories/CopyHistoryRepository';
+import { ConfigRepository } from './infrastructure/repositories/ConfigRepository';
 import { VSCodeFileProvider } from './infrastructure/adapters/VSCodeFileProvider';
 
 // Application
@@ -29,11 +30,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const historyRepo = new CopyHistoryRepository(context.workspaceState);
   await historyRepo.initialize();
 
+  const configRepo = new ConfigRepository(context.workspaceState);
+  await configRepo.initialize();
+
   // ── Application ───────────────────────────────────────────────────────────
   const groupService = new GroupService(groupRepo);
   const contextExtraction = new ContextExtractionService(fileProvider);
   const historyService = new CopyHistoryService(historyRepo);
-  const exportService = new ExportService(contextExtraction, fileProvider, historyService);
+  const exportService = new ExportService(contextExtraction, fileProvider, historyService, configRepo);
 
   // ── Presentation ──────────────────────────────────────────────────────────
   const groupProvider = new GroupTreeProvider(groupService);
