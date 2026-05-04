@@ -121,6 +121,25 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
         case 'switchTab':
           response = this.handleSwitchTab(message.payload);
           break;
+        case 'newGroup':
+          // Open create group dialog
+          await vscode.commands.executeCommand('copygroups.createGroup');
+          response = { type: 'success', data: { action: 'newGroup' } };
+          break;
+        case 'editGroup':
+          // Open edit group dialog
+          await vscode.commands.executeCommand('copygroups.editGroup', message.payload?.groupId);
+          response = { type: 'success', data: { action: 'editGroup' } };
+          break;
+        case 'updateSetting':
+          // Update a setting value
+          const config = await this.configRepo.get();
+          for (const [key, value] of Object.entries(message.payload || {})) {
+            (config as any)[key] = value;
+          }
+          await this.configRepo.save(config);
+          response = { type: 'success', data: { updated: true } };
+          break;
         default:
           response = { type: 'error', error: `Unknown command: ${message.command}` };
       }
@@ -170,8 +189,8 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
     const pageSize = 50;
     const skip = page * pageSize;
 
-    // Get all history entries
-    const allEntries = await this.historyService.getAll();
+    // Get all history entries (ensure it's an array)
+    const allEntries = (await this.historyService.getAll()) || [];
     
     // Apply filters
     let filtered = allEntries;
@@ -266,7 +285,7 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
       if (!group) {
         return { type: 'error', error: 'Group not found' };
       }
-      const { output } = await this.exportService.buildGroupOutput(group);
+      const output = await this.exportService.buildGroupOutput(group);
       await vscode.env.clipboard.writeText(output);
       return { type: 'success', data: { copied: true } };
     } else if (payload.historyEntryId) {

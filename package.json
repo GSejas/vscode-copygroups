@@ -144,6 +144,10 @@
         "command": "copygroups.syncViews",
         "title": "Sync Views",
         "icon": "$(sync)"
+      },
+      {
+        "command": "copygroups.openWebviewInEditor",
+        "title": "Copy Groups: Open Webview in Editor"
       }
     ],
     "viewsContainers": {

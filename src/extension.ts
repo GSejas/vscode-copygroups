@@ -553,6 +553,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       historyProvider.refresh();
     })
   );
+
+  // ── Open webview in focused view ───────────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.openWebviewInEditor', async () => {
+      // Focus the webview view in the sidebar
+      // This brings it to the foreground and maximizes visibility
+      await vscode.commands.executeCommand('copygroups.sidebar.focus');
+    })
+  );
 }
 
 export function deactivate(): void {
