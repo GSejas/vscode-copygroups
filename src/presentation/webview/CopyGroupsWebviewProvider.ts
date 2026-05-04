@@ -192,39 +192,42 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
     // Get all history entries (ensure it's an array)
     const allEntries = (await this.historyService.getAll()) || [];
     
-    // Apply filters
-    let filtered = allEntries;
+    // Apply filters with defensive null checks
+    let filtered = allEntries.filter(e => e && e.id); // Ensure valid entries
+    
     if (payload.filters?.repoName) {
       filtered = filtered.filter(e => 
-        e.snapshots.some(s => s.repositoryMetadata?.repoName === payload.filters.repoName)
+        e.snapshots && e.snapshots.some(s => s?.repositoryMetadata?.repoName === payload.filters.repoName)
       );
     }
     if (payload.filters?.searchQuery) {
       const query = payload.filters.searchQuery.toLowerCase();
       filtered = filtered.filter(e =>
-        e.output.toLowerCase().includes(query) ||
-        e.name.toLowerCase().includes(query)
+        (e.output?.toLowerCase().includes(query) || false) ||
+        (e.name?.toLowerCase().includes(query) || false)
       );
     }
     if (payload.filters?.favorites) {
-      filtered = filtered.filter(e => e.isFavourite);
+      filtered = filtered.filter(e => e.isFavourite === true);
     }
 
     // Paginate
     const total = filtered.length;
     const entries = filtered.slice(skip, skip + pageSize).map(e => ({
-      id: e.id,
-      name: e.name,
-      timestamp: e.copiedAt.toISOString(),
-      fileCount: e.snapshots.length,
-      size: new Blob([e.output]).size,
-      repos: [...new Set(e.snapshots.map(s => s.repositoryMetadata?.repoName || 'unknown'))],
-      isFavourite: e.isFavourite,
+      id: e.id || '',
+      name: e.name || 'Unnamed',
+      timestamp: e.copiedAt ? e.copiedAt.toISOString() : new Date().toISOString(),
+      fileCount: e.snapshots?.length || 0,
+      size: e.output ? new Blob([e.output]).size : 0,
+      repos: e.snapshots ? [...new Set(e.snapshots.map(s => s?.repositoryMetadata?.repoName || 'unknown'))] : [],
+      isFavourite: e.isFavourite === true,
     }));
 
     // Get unique repos for filter dropdown
     const allRepos = [...new Set(
-      allEntries.flatMap(e => e.snapshots.map(s => s.repositoryMetadata?.repoName).filter(Boolean) as string[])
+      allEntries
+        .filter(e => e?.snapshots)
+        .flatMap(e => (e.snapshots || []).map(s => s?.repositoryMetadata?.repoName).filter(Boolean) as string[])
     )];
 
     return {
