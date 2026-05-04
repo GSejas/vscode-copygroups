@@ -413,6 +413,15 @@ export class ExportService {
     return { output, snapshots };
   }
 
+  /**
+   * Build markdown output for a group (webview helper)
+   * Returns just the output string, useful for preview operations
+   */
+  async buildGroupOutput(group: Group, includePreprompt = true): Promise<string> {
+    const { output } = await this.buildOutput(group, includePreprompt);
+    return output;
+  }
+
   // ─── Rendering ────────────────────────────────────────────────────────────
 
   private renderMarkdown(group: Group, snapshots: CopiedFileSnapshot[], config?: CopyConfig): string {

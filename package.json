@@ -158,14 +158,20 @@
     "views": {
       "copygroups": [
         {
-          "id": "copygroups.groups",
-          "name": "Groups",
+          "id": "copygroups.sidebar",
+          "name": "Copy Groups",
+          "type": "webview",
           "when": "true"
         },
         {
+          "id": "copygroups.groups",
+          "name": "Groups (Tree)",
+          "when": "false"
+        },
+        {
           "id": "copygroups.history",
-          "name": "Copy History",
-          "when": "true"
+          "name": "Copy History (Tree)",
+          "when": "false"
         }
       ]
     },

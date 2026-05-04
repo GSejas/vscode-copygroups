@@ -24,6 +24,7 @@ import { RepositoryMetadata } from './domain/valueObjects/FileReference';
 // Presentation
 import { GroupTreeProvider, GroupItem } from './presentation/treeview/GroupTreeProvider';
 import { HistoryTreeProvider, HistoryItem } from './presentation/treeview/HistoryTreeProvider';
+import { CopyGroupsWebviewProvider } from './presentation/webview/CopyGroupsWebviewProvider';
 
 // Utils
 import { PatternMatcher } from './utils/patternMatcher';
@@ -85,6 +86,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeDataProvider: historyProvider,
     showCollapseAll: true,
   });
+
+  // ── Unified Sidebar Webview ───────────────────────────────────────────────
+  const webviewProvider = new CopyGroupsWebviewProvider(
+    context,
+    groupService,
+    historyService,
+    exportService,
+    configRepo
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      CopyGroupsWebviewProvider.viewType,
+      webviewProvider
+    )
+  );
 
   // ── Group commands ────────────────────────────────────────────────────────
 
