@@ -5,7 +5,7 @@
 
 import { GroupEntity, Group } from '../../domain/entities/Group';
 import { IGroupRepository } from '../../domain/interfaces/IGroupRepository';
-import { createFileReference } from '../../domain/valueObjects/FileReference';
+import { createFileReference, RepositoryMetadata } from '../../domain/valueObjects/FileReference';
 import { Tag } from '../../domain/valueObjects/Tag';
 import { ContextMode } from '../../domain/valueObjects/ContextMode';
 import { Preprompt } from '../../domain/entities/Preprompt';
@@ -39,14 +39,14 @@ export class GroupService {
     await this.repository.delete(groupId);
   }
 
-  async addFileToGroup(groupId: string, fileUri: string, relativePath: string): Promise<Group> {
+  async addFileToGroup(groupId: string, fileUri: string, relativePath: string, repositoryMetadata?: RepositoryMetadata): Promise<Group> {
     const group = await this.repository.getById(groupId);
     if (!group) {
       throw new Error(`Group ${groupId} not found`);
     }
 
     if (!group.fileReferences.some(f => f.uri === fileUri)) {
-      const fileRef = createFileReference(fileUri, relativePath);
+      const fileRef = createFileReference(fileUri, relativePath, undefined, repositoryMetadata);
 
       group.fileReferences.push(fileRef);
       group.updatedAt = new Date();

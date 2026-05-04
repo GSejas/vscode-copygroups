@@ -69,6 +69,13 @@ export class ExportService {
           continue;
         }
 
+        // Skip directories
+        const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(fileUri));
+        if ((stat.type & vscode.FileType.Directory) !== 0) {
+          skippedReasons.set(fileUri, 'Is a directory, not a file');
+          continue;
+        }
+
         // Pattern + binary + size checks (pattern skipped when walkDirectory already filtered)
         if (!skipPatternCheck) {
           const relativePath = await this.fileProvider.getRelativePath(fileUri);
@@ -86,9 +93,7 @@ export class ExportService {
             continue;
           }
         }
-
-        const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(fileUri));
-        if (stat.size > config.maxFileSizeBytes) {
+        if (stat.type !== vscode.FileType.File || stat.size > config.maxFileSizeBytes) {
           skippedReasons.set(fileUri, `File too large (${(stat.size / 1024).toFixed(0)} KB)`);
           continue;
         }
@@ -386,6 +391,14 @@ export class ExportService {
           snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: 'File not found' });
           continue;
         }
+        
+        // Skip directories - groups should only contain files
+        const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(fileRef.uri));
+        if ((stat.type & vscode.FileType.Directory) !== 0) {
+          snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: 'Is a directory, not a file' });
+          continue;
+        }
+        
         const extractedContent = await this.contextExtraction.extract(fileRef.uri, effectiveMode);
         snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent, contextMode: effectiveMode });
       } catch (err) {
@@ -416,16 +429,60 @@ export class ExportService {
     }
     parts.push('\n---\n\n');
 
-    for (const snap of snapshots) {
-      parts.push(`## ${snap.relativePath}\n\n`);
-      if (snap.error) {
-        parts.push(`> ⚠️ ${snap.error}\n\n`);
-      } else {
-        const lang = getLanguageTag(snap.relativePath);
-        const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
-        parts.push(`\`\`\`${lang}\n`);
-        parts.push(content);
-        parts.push('\n```\n\n');
+    // Group files by repository if metadata is available
+    const filesByRepo = new Map<string, Array<{ snap: CopiedFileSnapshot; ref: any }>>();
+    for (let i = 0; i < snapshots.length; i++) {
+      const snap = snapshots[i];
+      const ref = group.fileReferences[i];
+      const repoKey = ref?.repositoryMetadata?.repoName || ref?.repositoryMetadata?.rootPath || 'files';
+      
+      if (!filesByRepo.has(repoKey)) {
+        filesByRepo.set(repoKey, []);
+      }
+      filesByRepo.get(repoKey)!.push({ snap, ref });
+    }
+
+    // Check if we have multiple repos
+    const hasMultipleRepos = filesByRepo.size > 1 && 
+      Array.from(filesByRepo.entries()).some(([key]) => key !== 'files' && group.fileReferences.some(f => f.repositoryMetadata?.repoName));
+
+    if (hasMultipleRepos) {
+      // Render grouped by repo
+      for (const [repoKey, files] of filesByRepo) {
+        const firstRef = files[0].ref;
+        if (firstRef?.repositoryMetadata?.repoName && repoKey !== 'files') {
+          parts.push(`## Repository: ${repoKey}\n`);
+          if (firstRef.repositoryMetadata.rootPath) {
+            parts.push(`> Root: \`${firstRef.repositoryMetadata.rootPath}\`\n\n`);
+          }
+        }
+        
+        for (const { snap } of files) {
+          parts.push(`### ${snap.relativePath}\n\n`);
+          if (snap.error) {
+            parts.push(`> ⚠️ ${snap.error}\n\n`);
+          } else {
+            const lang = getLanguageTag(snap.relativePath);
+            const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
+            parts.push(`\`\`\`${lang}\n`);
+            parts.push(content);
+            parts.push('\n```\n\n');
+          }
+        }
+      }
+    } else {
+      // Render flat (no repo grouping)
+      for (const snap of snapshots) {
+        parts.push(`## ${snap.relativePath}\n\n`);
+        if (snap.error) {
+          parts.push(`> ⚠️ ${snap.error}\n\n`);
+        } else {
+          const lang = getLanguageTag(snap.relativePath);
+          const content = config?.addLineNumbers ? addLineNumbers(snap.extractedContent) : snap.extractedContent;
+          parts.push(`\`\`\`${lang}\n`);
+          parts.push(content);
+          parts.push('\n```\n\n');
+        }
       }
     }
 

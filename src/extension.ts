@@ -19,10 +19,34 @@ import { CopyHistoryService } from './application/services/CopyHistoryService';
 // Domain
 import { ContextModeType } from './domain/valueObjects/ContextMode';
 import { SYSTEM_PREPROMPTS } from './domain/entities/Preprompt';
+import { RepositoryMetadata } from './domain/valueObjects/FileReference';
 
 // Presentation
 import { GroupTreeProvider, GroupItem } from './presentation/treeview/GroupTreeProvider';
 import { HistoryTreeProvider, HistoryItem } from './presentation/treeview/HistoryTreeProvider';
+
+// Utils
+import { PatternMatcher } from './utils/patternMatcher';
+
+// Helper to extract repository metadata from a file URI
+function getRepositoryMetadata(fileUri: vscode.Uri): RepositoryMetadata {
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(fileUri);
+  if (!workspaceFolder) {
+    return { rootPath: fileUri.fsPath.split(/[\\/]/).slice(0, -1).join('/') };
+  }
+  
+  const rootPath = workspaceFolder.uri.fsPath;
+  const workspaceName = workspaceFolder.name;
+  
+  // Try to infer repo name from path (last folder in the path, or workspace name)
+  const repoName = workspaceName || rootPath.split(/[\\/]/).pop() || 'project';
+  
+  return {
+    rootPath,
+    workspaceName,
+    repoName,
+  };
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // ── Infrastructure ────────────────────────────────────────────────────────
@@ -156,16 +180,54 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       'copygroups.addToGroup',
       async (contextUri?: vscode.Uri) => {
-        // Resolve the file URI — could come from explorer context or be absent
-        let fileUri: vscode.Uri | undefined = contextUri;
-        if (!fileUri) {
+        // Resolve the file/folder URI — could come from explorer context or be absent
+        let resourceUri: vscode.Uri | undefined = contextUri;
+        if (!resourceUri) {
           const editor = vscode.window.activeTextEditor;
           if (editor) {
-            fileUri = editor.document.uri;
+            resourceUri = editor.document.uri;
           }
         }
-        if (!fileUri) {
-          vscode.window.showErrorMessage('No file selected. Open a file or right-click one in the explorer.');
+        if (!resourceUri) {
+          vscode.window.showErrorMessage('No file or folder selected. Open a file or right-click one in the explorer.');
+          return;
+        }
+
+        // Check if it's a folder
+        const stat = await vscode.workspace.fs.stat(resourceUri);
+        const isFolder = (stat.type & vscode.FileType.Directory) !== 0;
+
+        // If it's a folder, expand it to get all files
+        let fileUris: string[] = [];
+        if (isFolder) {
+          const config = await configRepo.get();
+          await (async function walkDir(dirUri: vscode.Uri, depth: number): Promise<void> {
+            if (depth > config.maxDirectoryDepth) return;
+            try {
+              const entries = await vscode.workspace.fs.readDirectory(dirUri);
+              for (const [name, type] of entries) {
+                if (name.startsWith('.')) continue;
+                const childUri = vscode.Uri.joinPath(dirUri, name);
+                if ((type & vscode.FileType.Directory) !== 0) {
+                  await walkDir(childUri, depth + 1);
+                } else {
+                  const relativePath = await fileProvider.getRelativePath(childUri.toString());
+                  const matcher = new PatternMatcher(config.includePatterns, config.excludePatterns);
+                  if (matcher.shouldInclude(relativePath)) {
+                    fileUris.push(childUri.toString());
+                  }
+                }
+              }
+            } catch {
+              // Folder read failed, skip
+            }
+          })(resourceUri, 0);
+        } else {
+          fileUris = [resourceUri.toString()];
+        }
+
+        if (fileUris.length === 0) {
+          vscode.window.showErrorMessage('No files found' + (isFolder ? ' in folder' : '') + '.');
           return;
         }
 
@@ -194,10 +256,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
         if (!chosen) return;
 
-        const relativePath = await fileProvider.getRelativePath(fileUri.toString());
-        await groupService.addFileToGroup(chosen.groupId, fileUri.toString(), relativePath);
+        // Add all files to the group
+        let addedCount = 0;
+        for (const fileUri of fileUris) {
+          try {
+            const relativePath = await fileProvider.getRelativePath(fileUri);
+            const fileVscodeUri = vscode.Uri.parse(fileUri);
+            const repoMetadata = getRepositoryMetadata(fileVscodeUri);
+            await groupService.addFileToGroup(chosen.groupId, fileUri, relativePath, repoMetadata);
+            addedCount++;
+          } catch {
+            // Skip files that can't be added
+          }
+        }
+
         groupProvider.refresh();
-        vscode.window.showInformationMessage(`Added to "${chosen.label}".`);
+        const message = isFolder 
+          ? `Added ${addedCount} file(s) to "${chosen.label}".`
+          : `Added to "${chosen.label}".`;
+        vscode.window.showInformationMessage(message);
       }
     )
   );
@@ -448,6 +525,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await historyService.clearHistory();
       historyProvider.refresh();
       vscode.window.showInformationMessage('History cleared (favourites kept).');
+    })
+  );
+
+  // ── Sync command ──────────────────────────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.syncViews', () => {
+      groupProvider.refresh();
+      historyProvider.refresh();
     })
   );
 }

@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.1.3",
+  "version": "0.1.6",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {
@@ -139,6 +139,11 @@
       {
         "command": "copygroups.history.clear",
         "title": "Copy Groups: Clear History (keep favourites)"
+      },
+      {
+        "command": "copygroups.syncViews",
+        "title": "Sync Views",
+        "icon": "$(sync)"
       }
     ],
     "viewsContainers": {
@@ -170,18 +175,33 @@
           "command": "copygroups.createGroup",
           "when": "view == copygroups.groups",
           "group": "navigation"
+        },
+        {
+          "command": "copygroups.syncViews",
+          "when": "view == copygroups.groups",
+          "group": "navigation"
+        },
+        {
+          "command": "copygroups.syncViews",
+          "when": "view == copygroups.history",
+          "group": "navigation"
         }
       ],
       "explorer/context": [
         {
           "command": "copygroups.copyContext",
           "group": "1_modification@1",
-          "when": "resourceScheme == file"
+          "when": "resourceScheme == file || explorerResourceIsFolder"
         },
         {
           "command": "copygroups.addToGroup",
           "group": "1_modification@2",
-          "when": "resourceScheme == file"
+          "when": "resourceScheme == file || explorerResourceIsFolder"
+        },
+        {
+          "command": "copygroups.copyFolder",
+          "group": "1_modification@3",
+          "when": "explorerResourceIsFolder"
         }
       ],
       "view/item/context": [

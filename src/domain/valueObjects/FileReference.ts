@@ -1,6 +1,6 @@
 /**
  * FileReference Value Object
- * Represents a file in a group with optional line range
+ * Represents a file in a group with optional line range and repository context
  */
 
 import { ContextMode } from './ContextMode';
@@ -10,11 +10,18 @@ export interface LineRange {
   end: number;
 }
 
+export interface RepositoryMetadata {
+  rootPath?: string; // Absolute path to workspace/repo root
+  workspaceName?: string; // Workspace folder name
+  repoName?: string; // Repository or project name
+}
+
 export interface FileReference {
   uri: string; // VS Code file URI
   relativePath: string; // For portability and display
   lines?: LineRange; // Optional: only include specific lines
   overrideContextMode?: ContextMode; // Per-file override
+  repositoryMetadata?: RepositoryMetadata; // Repository context for multi-repo awareness
 }
 
 export function validateFileReference(ref: any): ref is FileReference {
@@ -31,13 +38,24 @@ export function validateFileReference(ref: any): ref is FileReference {
     }
   }
 
+  if (ref.repositoryMetadata) {
+    if (typeof ref.repositoryMetadata !== 'object') return false;
+    // Metadata fields are all optional, just validate that it's an object
+  }
+
   return true;
 }
 
-export function createFileReference(uri: string, relativePath: string, overrideContextMode?: ContextMode): FileReference {
+export function createFileReference(
+  uri: string,
+  relativePath: string,
+  overrideContextMode?: ContextMode,
+  repositoryMetadata?: RepositoryMetadata
+): FileReference {
   return {
     uri,
     relativePath,
     overrideContextMode,
+    repositoryMetadata,
   };
 }
