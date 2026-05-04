@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {
@@ -158,20 +158,20 @@
     "views": {
       "copygroups": [
         {
-          "id": "copygroups.sidebar",
-          "name": "Copy Groups",
-          "type": "webview",
+          "id": "copygroups.groups",
+          "name": "Groups",
           "when": "true"
         },
         {
-          "id": "copygroups.groups",
-          "name": "Groups (Tree)",
-          "when": "false"
+          "id": "copygroups.history",
+          "name": "Copy History",
+          "when": "true"
         },
         {
-          "id": "copygroups.history",
-          "name": "Copy History (Tree)",
-          "when": "false"
+          "id": "copygroups.sidebar",
+          "name": "Copy Groups (Webview)",
+          "type": "webview",
+          "when": "true"
         }
       ]
     },

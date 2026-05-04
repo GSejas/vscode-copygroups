@@ -8,6 +8,31 @@
   let currentTab = 'copy';
   let historyPage = 0;
 
+  // Debug logging
+  const debugLog = [];
+  function addDebugLog(type, message) {
+    const timestamp = new Date().toLocaleTimeString();
+    debugLog.push({ type, message, timestamp });
+    updateDebugUI();
+    console.log(`[${type}] ${timestamp}: ${message}`);
+  }
+
+  function updateDebugUI() {
+    const debugContainer = document.getElementById('debug-log');
+    if (debugContainer) {
+      debugContainer.innerHTML = debugLog
+        .slice(-20) // Show last 20 entries
+        .map(entry => {
+          let color = '#0e0'; // green
+          if (entry.type === 'error') color = '#f44';
+          else if (entry.type === 'sent') color = '#0e9';
+          else if (entry.type === 'received') color = '#0c9';
+          return `<div style="color: ${color};">[${entry.timestamp}] ${entry.type.toUpperCase()}: ${entry.message}</div>`;
+        })
+        .join('');
+    }
+  }
+
   // Tab Management
   document.querySelectorAll('.tab-button').forEach(button => {
     button.addEventListener('click', () => {
@@ -48,22 +73,20 @@
 
   // Copy Tab
   function loadCopyTab(groupId, historyEntryId) {
-    vscode.postMessage({
-      command: 'loadCopyTab',
-      payload: { groupId, historyEntryId },
-    });
+    const msg = { command: 'loadCopyTab', payload: { groupId, historyEntryId } };
+    addDebugLog('sent', `loadCopyTab(${groupId || historyEntryId})`);
+    vscode.postMessage(msg);
   }
 
   // History Tab
   function loadHistoryTab(page = 0) {
     historyPage = page;
-    vscode.postMessage({
+    const msg = {
       command: 'loadHistoryTab',
-      payload: {
-        page,
-        filters: getHistoryFilters(),
-      },
-    });
+      payload: { page, filters: getHistoryFilters() },
+    };
+    addDebugLog('sent', `loadHistoryTab(page=${page})`);
+    vscode.postMessage(msg);
   }
 
   function getHistoryFilters() {
@@ -129,12 +152,13 @@
     const { type, data, error } = event.data;
 
     if (type === 'error') {
-      console.error('Error:', error);
+      addDebugLog('error', `Error: ${error}`);
       showError(error);
       return;
     }
 
     if (type === 'success') {
+      addDebugLog('received', `Response for ${lastCommand}`);
       switch (lastCommand) {
         case 'loadCopyTab':
           renderCopyTab(data);
@@ -447,5 +471,27 @@
     vscode.postMessage({
       command: 'openDetailedView',
     });
+  };
+
+  // Communication Test Functions
+  window.testLoadGroups = () => {
+    hookCommand('loadGroupsTab');
+    addDebugLog('test', 'Sending: loadGroupsTab');
+    vscode.postMessage({ command: 'loadGroupsTab' });
+  };
+
+  window.testLoadHistory = () => {
+    hookCommand('loadHistoryTab');
+    addDebugLog('test', 'Sending: loadHistoryTab with page=0');
+    vscode.postMessage({
+      command: 'loadHistoryTab',
+      payload: { page: 0, filters: {} },
+    });
+  };
+
+  window.testLoadSettings = () => {
+    hookCommand('loadSettingsTab');
+    addDebugLog('test', 'Sending: loadSettingsTab');
+    vscode.postMessage({ command: 'loadSettingsTab' });
   };
 })();

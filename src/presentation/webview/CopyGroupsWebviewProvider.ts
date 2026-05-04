@@ -394,6 +394,18 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
                     <div id="settings-content" class="settings-content">
                         <p class="placeholder">Loading...</p>
                     </div>
+                    
+                    <!-- Debug Section -->
+                    <div style="border-top: 1px solid #2d2d2d; margin-top: 24px; padding-top: 16px;">
+                        <div class="section-header">Communication Test</div>
+                        <button class="btn-secondary" style="width: 100%; margin-bottom: 8px;" onclick="testLoadGroups()">🧪 Test: Load Groups</button>
+                        <button class="btn-secondary" style="width: 100%; margin-bottom: 8px;" onclick="testLoadHistory()">🧪 Test: Load History</button>
+                        <button class="btn-secondary" style="width: 100%; margin-bottom: 8px;" onclick="testLoadSettings()">🧪 Test: Load Settings</button>
+                        <div id="debug-log" style="background: #000; border: 1px solid #333; border-radius: 4px; padding: 8px; margin-top: 8px; font-family: Monaco, monospace; font-size: 10px; color: #0e0; max-height: 150px; overflow-y: auto;">
+                            <div style="color: #666;">Ready for testing...</div>
+                        </div>
+                    </div>
+                    </div>
                 </div>
             </div>
         </div>
