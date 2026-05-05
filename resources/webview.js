@@ -4,9 +4,38 @@
  */
 
 (function() {
-  const vscode = acquireVsCodeApi();
+  // Initialize VS Code API first with error handling
+  let vscode;
+  try {
+    vscode = acquireVsCodeApi();
+    console.log('[Webview] ✓ VS Code API acquired successfully');
+  } catch (error) {
+    console.error('[Webview] ✗ CRITICAL: acquireVsCodeApi() failed:', error);
+    document.body.innerHTML = `<div style="padding: 20px; color: red; font-family: monospace;">
+      <strong>FATAL ERROR:</strong> Could not initialize VS Code API<br>
+      ${error.message}
+    </div>`;
+    throw error;
+  }
+
+  console.log('[Webview] Script initialized, attaching event listeners...');
+
+  // Global error handler
+  window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
+    addDebugLog('error', `Global: ${event.error?.message || event.message}`);
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled rejection:', event.reason);
+    addDebugLog('error', `Unhandled: ${event.reason?.message || String(event.reason)}`);
+  });
   let currentTab = 'copy';
   let historyPage = 0;
+  
+  // Command tracking for matching responses to requests
+  const pendingCommands = new Map(); // messageId -> { command, timestamp }
+  let messageCounter = 0;
 
   // Debug logging
   const debugLog = [];
@@ -73,19 +102,30 @@
 
   // Copy Tab
   function loadCopyTab(groupId, historyEntryId) {
-    const msg = { command: 'loadCopyTab', payload: { groupId, historyEntryId } };
+    const messageId = ++messageCounter;
+    const msg = { 
+      command: 'loadCopyTab', 
+      payload: { groupId, historyEntryId },
+      messageId 
+    };
+    pendingCommands.set(messageId, { command: 'loadCopyTab', timestamp: Date.now() });
     addDebugLog('sent', `loadCopyTab(${groupId || historyEntryId})`);
+    console.log('[Webview] Posting message:', msg);
     vscode.postMessage(msg);
   }
 
   // History Tab
   function loadHistoryTab(page = 0) {
     historyPage = page;
+    const messageId = ++messageCounter;
     const msg = {
       command: 'loadHistoryTab',
       payload: { page, filters: getHistoryFilters() },
+      messageId,
     };
+    pendingCommands.set(messageId, { command: 'loadHistoryTab', timestamp: Date.now() });
     addDebugLog('sent', `loadHistoryTab(page=${page})`);
+    console.log('[Webview] Posting message:', msg);
     vscode.postMessage(msg);
   }
 
@@ -131,25 +171,45 @@
 
   // Groups Tab
   function loadGroupsTab() {
-    vscode.postMessage({ command: 'loadGroupsTab' });
+    const messageId = ++messageCounter;
+    const msg = { command: 'loadGroupsTab', messageId };
+    pendingCommands.set(messageId, { command: 'loadGroupsTab', timestamp: Date.now() });
+    console.log('[Webview] Posting message:', msg);
+    vscode.postMessage(msg);
   }
 
   const newGroupBtn = document.getElementById('new-group-btn');
   if (newGroupBtn) {
     newGroupBtn.addEventListener('click', () => {
-      // TODO: Open group editor
-      vscode.postMessage({ command: 'newGroup' });
+      const messageId = ++messageCounter;
+      const msg = { command: 'newGroup', messageId };
+      pendingCommands.set(messageId, { command: 'newGroup', timestamp: Date.now() });
+      console.log('[Webview] Posting message:', msg);
+      vscode.postMessage(msg);
     });
   }
 
   // Settings Tab
   function loadSettingsTab() {
-    vscode.postMessage({ command: 'loadSettingsTab' });
+    const messageId = ++messageCounter;
+    const msg = { command: 'loadSettingsTab', messageId };
+    pendingCommands.set(messageId, { command: 'loadSettingsTab', timestamp: Date.now() });
+    console.log('[Webview] Posting message:', msg);
+    vscode.postMessage(msg);
   }
 
   // Message Handler
   window.addEventListener('message', event => {
-    const { type, data, error } = event.data;
+    const { type, data, error, messageId } = event.data;
+    
+    console.log('[Webview] Message received from extension:', event.data);
+
+    // Get the original command from tracking
+    let originalCommand = 'unknown';
+    if (messageId && pendingCommands.has(messageId)) {
+      originalCommand = pendingCommands.get(messageId).command;
+      pendingCommands.delete(messageId); // Clean up
+    }
 
     if (type === 'error') {
       addDebugLog('error', `Error: ${error}`);
@@ -158,8 +218,8 @@
     }
 
     if (type === 'success') {
-      addDebugLog('received', `Response for ${lastCommand}`);
-      switch (lastCommand) {
+      addDebugLog('received', `Response for ${originalCommand}`);
+      switch (originalCommand) {
         case 'loadCopyTab':
           renderCopyTab(data);
           break;
@@ -182,15 +242,11 @@
           showSuccess('Entry deleted');
           loadHistoryTab(0);
           break;
+        default:
+          console.log('[Webview] Unhandled success response for:', originalCommand, data);
       }
     }
   });
-
-  let lastCommand = '';
-
-  function hookCommand(command) {
-    lastCommand = command;
-  }
 
   // Render Functions
   function renderCopyTab(data) {

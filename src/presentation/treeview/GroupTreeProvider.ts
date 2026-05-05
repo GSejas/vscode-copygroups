@@ -68,6 +68,12 @@ export class FileItem extends vscode.TreeItem {
     this.description = `· ${currentMode}`;
     this.iconPath = new vscode.ThemeIcon('file');
     this.contextValue = 'groupFileItem';
+
+    this.command = {
+      command: 'copygroups.openFile',
+      title: 'Open File',
+      arguments: [this],
+    };
   }
 }
 

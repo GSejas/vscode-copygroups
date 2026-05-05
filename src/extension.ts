@@ -356,16 +356,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'copygroups.removeFileFromGroup',
-      async (groupId: string, fileUri: string) => {
-        await groupService.removeFileFromGroup(groupId, fileUri);
-        groupProvider.refresh();
-      }
-    )
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
       'copygroups.setGroupMode',
       async (arg: GroupItem | string) => {
         const groupId = arg instanceof GroupItem ? arg.group.id : arg;

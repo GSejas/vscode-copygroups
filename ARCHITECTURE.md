@@ -61,14 +61,21 @@ vscode-copygroups/
 │   │   ├── repositories/
 │   │   │   ├── GroupRepository.ts
 │   │   │   ├── PrepromptRepository.ts
+│   │   │   ├── ConfigRepository.ts
+│   │   │   ├── CopyHistoryRepository.ts
 │   │   │   └── index.ts
+│   │   ├── patterns/
+│   │   │   ├── Observer.ts              # IObservable, IStateObserver, BaseObservable
+│   │   │   └── index.ts
+│   │   ├── storage/
+│   │   │   ├── LocalFileStorage.ts      # Cross-instance file-based storage
+│   │   │   ├── StateManagementService.ts
+│   │   │   └── SchemaValidator.ts
 │   │   ├── adapters/
 │   │   │   ├── VSCodeFileProvider.ts
 │   │   │   ├── FileSystemAdapter.ts
 │   │   │   └── index.ts
-│   │   └── storage/
-│   │       ├── StateManagementService.ts
-│   │       └── SchemaValidator.ts
+│   │   └── index.ts
 │   ├── utils/
 │   │   ├── logger.ts
 │   │   ├── validators.ts
@@ -608,6 +615,87 @@ export class VSCodeFileProvider implements IFileContentProvider {
   }
 }
 ```
+
+#### **patterns/Observer.ts** (Multi-Window State Synchronization)
+
+The Observer pattern enables decoupled, reactive state management across multiple VS Code instances:
+
+```typescript
+export interface IStateObserver<T> {
+  onStateChanged(state: T): void;
+}
+
+export interface IObservable<T> {
+  subscribe(observer: IStateObserver<T>): void;
+  unsubscribe(observer: IStateObserver<T>): void;
+}
+
+export abstract class BaseObservable<T> implements IObservable<T> {
+  protected observers: Set<IStateObserver<T>> = new Set();
+
+  subscribe(observer: IStateObserver<T>): void {
+    this.observers.add(observer);
+  }
+
+  unsubscribe(observer: IStateObserver<T>): void {
+    this.observers.delete(observer);
+  }
+
+  protected notifyObservers(state: T): void {
+    for (const observer of this.observers) {
+      try {
+        observer.onStateChanged(state);
+      } catch (error) {
+        console.error('Observer notification error:', error);
+      }
+    }
+  }
+}
+```
+
+**Usage in GroupRepository & ConfigRepository:**
+- Both repositories extend `BaseObservable` and emit change events
+- When `save()` or `update()` is called, they call `notifyObservers()`
+- File watchers detect changes from other VS Code instances and trigger refresh
+- UI components (e.g., `GroupTreeProvider`) subscribe to listen for changes
+- Cross-window sync latency: ~100ms (limited by file system watcher)
+
+#### **storage/LocalFileStorage.ts** (Cross-Instance Persistence)
+
+File-based storage abstraction for data that must be shared across all VS Code instances:
+
+```typescript
+export class LocalFileStorage {
+  constructor(private fileName: string) {}
+
+  async get<T>(key: string, defaultValue?: T): Promise<T> {
+    // Reads from ~/.vscode-copygroups/{fileName}.json
+  }
+
+  async update<T>(key: string, value: T): Promise<void> {
+    // Writes to ~/.vscode-copygroups/{fileName}.json
+  }
+
+  async delete(key: string): Promise<void> {
+    // Removes entry from ~/.vscode-copygroups/{fileName}.json
+  }
+
+  async clear(): Promise<void> {
+    // Clears all entries in ~/.vscode-copygroups/{fileName}.json
+  }
+}
+```
+
+**Current Usage:**
+- Custom preprompts stored in `copygroups-preprompts.json`
+- Preprompts shared globally across all VS Code instances
+- Foundation for future GroupRepository migration
+
+**Advantages over globalState:**
+- Survives between VS Code sessions
+- Human-readable JSON format
+- Easily accessible from command line or other tools
+- Explicit versioning and lastModified timestamps
 
 ---
 

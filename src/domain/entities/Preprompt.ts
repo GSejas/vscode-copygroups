@@ -10,6 +10,7 @@ export interface Preprompt {
   name: string;
   template: string; // Template with {{variable}} placeholders
   mode: PrepromptMode;
+  isSystem?: boolean; // true for system preprompts, false/undefined for custom
   variables?: Record<string, string>; // Custom variables
   createdAt: Date;
   updatedAt: Date;
@@ -51,9 +52,10 @@ export function createPreprompt(
 }
 
 export const SYSTEM_PREPROMPTS: Record<string, Preprompt> = {
-  SECURITY_REVIEW: createPreprompt(
-    'Security Review',
-    `Review the following code for security vulnerabilities:
+  SECURITY_REVIEW: {
+    ...createPreprompt(
+      'Security Review',
+      `Review the following code for security vulnerabilities:
 
 {{context}}
 
@@ -63,11 +65,14 @@ Focus on:
 - Sensitive data exposure
 - SQL injection & code injection
 - CSRF & XSS vulnerabilities`,
-    'review'
-  ),
-  ARCHITECTURE_ANALYSIS: createPreprompt(
-    'Architecture Analysis',
-    `Analyze the architecture and design patterns in these files:
+      'review'
+    ),
+    isSystem: true,
+  },
+  ARCHITECTURE_ANALYSIS: {
+    ...createPreprompt(
+      'Architecture Analysis',
+      `Analyze the architecture and design patterns in these files:
 
 {{context}}
 
@@ -76,11 +81,14 @@ Provide insights on:
 - Separation of concerns
 - Code organization
 - Potential improvements`,
-    'analysis'
-  ),
-  PERFORMANCE_OPTIMIZATION: createPreprompt(
-    'Performance Optimization',
-    `Review these files for performance optimization opportunities:
+      'analysis'
+    ),
+    isSystem: true,
+  },
+  PERFORMANCE_OPTIMIZATION: {
+    ...createPreprompt(
+      'Performance Optimization',
+      `Review these files for performance optimization opportunities:
 
 {{context}}
 
@@ -89,11 +97,14 @@ Focus on:
 - Database queries
 - Memory usage
 - Caching opportunities`,
-    'review'
-  ),
-  DOCUMENTATION_GENERATION: createPreprompt(
-    'Documentation Generation',
-    `Generate documentation for these files:
+      'review'
+    ),
+    isSystem: true,
+  },
+  DOCUMENTATION_GENERATION: {
+    ...createPreprompt(
+      'Documentation Generation',
+      `Generate documentation for these files:
 
 {{context}}
 
@@ -102,6 +113,8 @@ Include:
 - Parameter documentation
 - Return value documentation
 - Usage examples`,
-    'summary'
-  ),
+      'summary'
+    ),
+    isSystem: true,
+  },
 };

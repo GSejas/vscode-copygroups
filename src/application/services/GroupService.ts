@@ -190,4 +190,44 @@ export class GroupService {
     await this.repository.save(group);
     return group;
   }
+
+  /**
+   * Set the context mode for a specific file in the group
+   */
+  async setFileMode(groupId: string, fileIndex: number, mode: ContextMode): Promise<Group> {
+    const group = await this.repository.getById(groupId);
+    if (!group) {
+      throw new Error(`Group ${groupId} not found`);
+    }
+
+    if (fileIndex < 0 || fileIndex >= group.fileReferences.length) {
+      throw new Error(`Invalid file index: ${fileIndex}`);
+    }
+
+    group.fileReferences[fileIndex].overrideContextMode = mode;
+    group.updatedAt = new Date();
+
+    await this.repository.save(group);
+    return group;
+  }
+
+  /**
+   * Remove a file from the group by index
+   */
+  async removeFileByIndex(groupId: string, fileIndex: number): Promise<Group> {
+    const group = await this.repository.getById(groupId);
+    if (!group) {
+      throw new Error(`Group ${groupId} not found`);
+    }
+
+    if (fileIndex < 0 || fileIndex >= group.fileReferences.length) {
+      throw new Error(`Invalid file index: ${fileIndex}`);
+    }
+
+    group.fileReferences.splice(fileIndex, 1);
+    group.updatedAt = new Date();
+
+    await this.repository.save(group);
+    return group;
+  }
 }

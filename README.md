@@ -27,14 +27,27 @@ Control what gets copied for each group — without touching the files.
 
 Right-click a group → **Set Context Mode** to change it any time.
 
+**Per-File Context Modes** — fine-grain control within a group:
+- Expand any group in the sidebar to see individual files, each showing its current mode
+- **Hover** a file row to reveal inline icon buttons: `⌃` / `⌄` to cycle modes, `🗑` to remove
+- **Right-click** a file for more options: *Set File Mode* (pick from a list), *Open File*, *Remove from Group*
+- **Click** any file to open it in the editor
+- Per-file modes are respected when copying and exporting
+
 ### Preprompt Templates
 Attach an LLM instruction template to a group. When you copy, the template wraps your code context automatically.
 
 Right-click a group → **Set Preprompt** to choose from built-in templates:
-- Security Review
-- Architecture Analysis
-- Performance Optimization
-**- Documentation Generation
+- **Security Review** — highlights vulnerabilities and security concerns
+- **Architecture Analysis** — analyzes design patterns and structure
+- **Performance Optimization** — reviews for performance opportunities
+- **Documentation Generation** — drafts comprehensive documentation
+
+**Custom Preprompts** — create, edit, and manage your own templates:
+- Command palette: `Ctrl+Shift+P` → **Create Custom Preprompt**
+- Define name, template text (with `{{variable}}` substitution), and mode
+- Stored in `~/.vscode-copygroups/` — shared across all VS Code instances
+- Edit and delete custom templates via command palette
 
 ### Quick Copy (no groups needed)
 - Right-click files in the explorer → **Copy Context** — copies selected files instantly
@@ -51,6 +64,11 @@ Both are off by default and controlled via VS Code settings (see [Configuration]
 ### Copy History
 Every copy is recorded in the *Copy History* panel. Re-copy, favourite, annotate, or delete past operations. Right-click a history entry to re-extract with a different context mode.
 
+**Add history files to a group** — right-click any history entry or individual file within it:
+- *Add All Files to Group* — adds every file from that snapshot to a group you pick
+- *Add File to Group* — adds just that one file
+- Duplicates are skipped automatically
+
 ---
 
 ## Getting Started
@@ -61,6 +79,17 @@ Every copy is recorded in the *Copy History* panel. Re-copy, favourite, annotate
 4. Press `Ctrl+Shift+G` to create your first group
 5. Right-click files in the explorer → **Add File to Group**
 6. Click the group to copy it to clipboard
+
+---
+
+## Multi-Window Synchronization
+
+Your groups, settings, and custom preprompts sync automatically across all open VS Code instances:
+
+- Create a group in Window A → instantly visible in Window B
+- Edit context modes in any window → all windows update within ~100ms
+- Custom preprompts stored in `~/.vscode-copygroups/` → shared globally
+- Works without any manual intervention or configuration
 
 ---
 

@@ -29,12 +29,14 @@ export interface WebviewState {
 export interface WebviewMessage {
   command: string;
   payload?: any;
+  messageId?: number;
 }
 
 export interface WebviewResponse {
   type: 'success' | 'error' | 'update';
   data?: any;
   error?: string;
+  messageId?: number; // Echo back the messageId from request
 }
 
 export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
@@ -75,13 +77,17 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage(
       async (message: WebviewMessage) => {
+        console.log('[Extension] Received message from webview:', message.command, message.payload);
         await this.handleWebviewMessage(message, webviewView.webview);
       }
     );
+
+    console.log('[Extension] Webview provider activated for:', this.constructor.name);
   }
 
   private async handleWebviewMessage(message: WebviewMessage, webview: vscode.Webview): Promise<void> {
     try {
+      console.log('[Extension] Handling message:', message.command);
       let response: WebviewResponse;
 
       switch (message.command) {
@@ -144,10 +150,20 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
           response = { type: 'error', error: `Unknown command: ${message.command}` };
       }
 
+      console.log('[Extension] Sending response for:', message.command, response);
+      // Echo back the messageId so the webview can track the response
+      if (message.payload?.messageId || (message as any).messageId) {
+        response.messageId = message.payload?.messageId || (message as any).messageId;
+      }
       webview.postMessage(response);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      webview.postMessage({ type: 'error', error: errorMessage });
+      console.error('[Extension] Error handling message:', message.command, error);
+      const errorResponse: WebviewResponse = { type: 'error', error: errorMessage };
+      if (message.payload?.messageId || (message as any).messageId) {
+        errorResponse.messageId = message.payload?.messageId || (message as any).messageId;
+      }
+      webview.postMessage(errorResponse);
     }
   }
 
@@ -185,15 +201,19 @@ export class CopyGroupsWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleLoadHistoryTab(payload: { page?: number; filters?: any }): Promise<WebviewResponse> {
+    console.log('[Extension] handleLoadHistoryTab called with payload:', payload);
     const page = payload.page || 0;
     const pageSize = 50;
     const skip = page * pageSize;
 
     // Get all history entries (ensure it's an array)
+    console.log('[Extension] Getting all history entries...');
     const allEntries = (await this.historyService.getAll()) || [];
+    console.log('[Extension] Retrieved', allEntries.length, 'history entries');
     
     // Apply filters with defensive null checks
     let filtered = allEntries.filter(e => e && e.id); // Ensure valid entries
+    console.log('[Extension] Filtered to', filtered.length, 'valid entries');
     
     if (payload.filters?.repoName) {
       filtered = filtered.filter(e => 

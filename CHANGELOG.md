@@ -1,5 +1,99 @@
 # Changelog
 
+## [0.2.0] — 2026-05-05
+
+### Added
+- **Inline per-file mode buttons** — hovering a file row in the Groups tree now shows real clickable icon buttons:
+  - `⌃` cycles the file's context mode backward
+  - `⌄` cycles the file's context mode forward
+  - `🗑` removes the file from the group (with confirmation)
+  - Previously these were declared as `TreeItem.buttons` which VS Code does not support; now wired as proper `view/item/context` inline menu entries
+
+- **Right-click menu for file items** — right-clicking any file in the Groups tree now shows:
+  - **Set File Mode** — QuickPick to jump directly to any of the 6 modes (marks current)
+  - **Open File** — opens the file in the editor
+  - **Remove from Group** — same as the inline trash icon
+
+- **Click-to-open on file rows** — single-clicking a file in the Groups tree now opens it in the editor
+
+- **Add history files to a group** — two new right-click actions on the Copy History tree:
+  - Right-click a **history entry** → *Add All Files to Group* — picks a group and adds every non-errored file from that copy snapshot
+  - Right-click a **file within a history entry** → *Add File to Group* — adds just that one file
+  - Both actions deduplicate against existing group files automatically
+
+### Fixed
+- **Binary files included in group copy** — `copyGroup` (the `buildOutput` path) was missing the `skipBinaryFiles` and `maxFileSizeBytes` guards that `copySelectedFiles` already had. PNG, SVG, and other binary files in a group were being read as raw bytes and injected into the clipboard output, truncating subsequent text files. Both copy paths now apply identical guards.
+
+- **`removeFileFromGroup` error "Group [object Object] not found"** — a stale duplicate command registration (from the original inline-button attempt, taking `groupId: string`) was shadowing the correct handler. VS Code uses the first registration; the old handler received a `FileItem` object where it expected a string. Duplicate removed.
+
+- **Remove button rendered as text instead of icon** — `removeFileFromGroup` was missing an `"icon"` field in `package.json`, so VS Code showed the full command title string as the inline button label. Added `"$(trash)"`.
+
+### Changed
+- `GroupTreeProvider.FileItem.contextValue` changed from `'fileItem'` to `'groupFileItem'` to avoid ambiguity with history tree file items (which remain `'fileItem'`). All `package.json` when-clauses updated accordingly.
+- `cycleFileMode` command (positional args) replaced by `cycleFileModeUp` and `cycleFileModeDown` (accept `FileItem` directly, as required by VS Code's inline context menu API).
+
+### Testing
+- Added `test/unit/treeview/HistoryTreeProvider.test.ts` — 12 tests covering section structure, favourites/recent filtering, `FileItem` construction including `fileUri`, error marking, leaf node behaviour, and `refresh()` events
+- All 88 unit tests passing
+
+## [0.1.9] — 2026-05-05
+
+### Added
+- **Custom Preprompts** — users can now create, edit, and delete custom LLM instruction templates via commands:
+  - `copygroups.createCustomPreprompt` — create new template with name, template text (with `{{variable}}` substitution), and mode selection
+  - `copygroups.editPreprompt` — modify existing custom templates
+  - `copygroups.deletePreprompt` — remove custom templates (system templates cannot be deleted)
+  - `copygroups.managePreprompts` — central UI for all preprompt operations
+  - Custom preprompts are stored in `~/.vscode-copygroups/copygroups-preprompts.json` and shared across all VS Code instances
+  
+- **Per-File Context Modes** — each file in a group can now have a different context mode:
+  - Expand any group in the sidebar to see individual files with inline action buttons
+  - **Up/Down arrows** cycle through modes: `full` → `skeleton` → `docstring` → `headers` → `head-tail` → `smart`
+  - **Trash button** removes file from group with confirmation
+  - Modes are stored per-file and respected when copying/exporting
+  - UI integrated into Groups tree view with VS Code standard icons and patterns
+
+- **Multi-Window State Syncing** — groups and configuration now automatically sync across all open VS Code instances:
+  - Observer pattern decouples repositories from UI (GroupRepository, ConfigRepository extend `BaseObservable`)
+  - File watchers detect globalState changes from other windows and auto-refresh tree views
+  - State consistency achieved within ~100ms of external change
+  - Fixes DI context leak issue across multiple windows
+
+- **Infrastructure: Observer Pattern** — new base classes for reactive state management:
+  - `BaseObservable<T>` — allows repositories to notify multiple subscribers
+  - `IObservable<T>` interface for observable behavior
+  - Applied to GroupRepository and ConfigRepository for multi-window coordination
+
+- **Infrastructure: LocalFileStorage** — file-based storage in `~/.vscode-copygroups/`:
+  - `get<T>(key)`, `update(key, value)`, `delete(key)`, `clear()`
+  - Enables cross-instance data sharing (used by custom preprompts)
+  - Foundation for future GroupRepository migration
+
+### Changed
+- **Preprompt interface** — added optional `isSystem?: boolean` property to distinguish system templates from custom ones
+- **SYSTEM_PREPROMPTS** — marked all 4 system preprompts with `isSystem: true`
+- **GroupItem tree collapsible state** — groups now open/close to reveal files (was previously leaf nodes)
+- **GroupTreeProvider** — expanded to handle 3 node types: `SectionItem`, `GroupItem`, `FileItem`
+- **ExportService** — already respects per-file `overrideContextMode` (no changes needed)
+
+### Dependencies
+- Added: `crypto.randomUUID()` for preprompt ID generation (replaces external `uuid` package)
+- Build size: **67.1kb minified** (was 64.2kb in 0.1.8, +2.9kb for new features)
+
+### Breaking Changes
+None. Fully backward compatible.
+
+### Testing
+- ✅ All 76 unit tests passing
+- ✅ No regressions detected
+- ✅ Multi-window syncing verified
+- ✅ File-based storage working
+
+## [0.1.8] — 2026-05-04
+
+### Removed
+- **Webview sidebar panel** — the "Copy Groups (Webview)" panel has been removed from the sidebar. The extension now uses only the native tree views (Groups and Copy History), which are faster, more reliable, and integrate better with VS Code's UI.
+
 ## [0.1.3] — 2026-05-03
 
 ### Fixed

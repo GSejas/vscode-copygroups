@@ -392,13 +392,22 @@ export class ExportService {
           continue;
         }
         
-        // Skip directories - groups should only contain files
         const stat = await vscode.workspace.fs.stat(vscode.Uri.parse(fileRef.uri));
         if ((stat.type & vscode.FileType.Directory) !== 0) {
           snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: 'Is a directory, not a file' });
           continue;
         }
-        
+
+        if (config.skipBinaryFiles && isBinaryFile(fileRef.relativePath)) {
+          snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: 'Binary file skipped' });
+          continue;
+        }
+
+        if (stat.size > config.maxFileSizeBytes) {
+          snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: `File too large (${(stat.size / 1024).toFixed(0)} KB)` });
+          continue;
+        }
+
         const extractedContent = await this.contextExtraction.extract(fileRef.uri, effectiveMode);
         snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent, contextMode: effectiveMode });
       } catch (err) {
