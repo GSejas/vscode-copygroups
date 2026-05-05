@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.1] — 2026-05-05
+
+### Fixed
+- **Preprompt commands not in command palette** — 4 preprompt commands (`createCustomPreprompt`, `editPreprompt`, `deletePreprompt`, `managePreprompts`) were implemented in extension.ts but not registered in `contributes.commands`. Added command palette entries so users can access these features via `Ctrl+Shift+P`.
+
 ## [0.2.0] — 2026-05-05
 
 ### Added
