@@ -5,16 +5,19 @@
  *   ⭐ Bookmarked  — pinned groups
  *   📁 All Groups  — sorted by most-recently updated
  *
- * Each group item shows file count, tags, and context mode.
- * Inline toolbar: Copy ($(clippy)), Delete ($(trash))
- * Right-click context menu (wired via package.json) also exposes bookmark toggle and rename.
+ * Each group is expandable to show individual files with per-file context modes.
+ * Files can have different modes: full, skeleton, docstring, headers, head-tail, smart
+ * Inline buttons to cycle mode (up/down) and remove files
  */
 
 import * as vscode from 'vscode';
 import { Group } from '../../domain/entities/Group';
+import { FileReference } from '../../domain/valueObjects/FileReference';
 import { GroupService } from '../../application/services/GroupService';
 
-type GroupTreeNode = SectionItem | GroupItem;
+type GroupTreeNode = SectionItem | GroupItem | FileItem;
+
+const MODES = ['full', 'skeleton', 'docstring', 'headers', 'head-tail', 'smart'] as const;
 
 // ─── Tree Items ───────────────────────────────────────────────────────────────
 
@@ -31,7 +34,7 @@ class SectionItem extends vscode.TreeItem {
 
 export class GroupItem extends vscode.TreeItem {
   constructor(public readonly group: Group) {
-    super(group.name, vscode.TreeItemCollapsibleState.None);
+    super(group.name, vscode.TreeItemCollapsibleState.Collapsed);
 
     const fileCount = group.fileReferences.length;
     const tagStr = group.tags.length > 0 ? ` · ${group.tags.map(t => t.name).join(', ')}` : '';
@@ -53,6 +56,21 @@ export class GroupItem extends vscode.TreeItem {
   }
 }
 
+export class FileItem extends vscode.TreeItem {
+  constructor(
+    public readonly groupId: string,
+    public readonly file: FileReference,
+    public readonly fileIndex: number
+  ) {
+    const currentMode = file.overrideContextMode?.type || 'default';
+    super(file.relativePath, vscode.TreeItemCollapsibleState.None);
+
+    this.description = `· ${currentMode}`;
+    this.iconPath = new vscode.ThemeIcon('file');
+    this.contextValue = 'groupFileItem';
+  }
+}
+
 function buildGroupTooltip(group: Group): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
@@ -60,7 +78,7 @@ function buildGroupTooltip(group: Group): vscode.MarkdownString {
   if (group.description) {
     md.appendMarkdown(`${group.description}\n\n`);
   }
-  md.appendMarkdown(`Context mode: \`${group.contextMode.type}\`\n\n`);
+  md.appendMarkdown(`Context mode: \`${group.contextMode.type}\` (default)\n\n`);
   if (group.tags.length > 0) {
     md.appendMarkdown(`Tags: ${group.tags.map(t => `\`${t.name}\``).join(' ')}\n\n`);
   }
@@ -69,7 +87,8 @@ function buildGroupTooltip(group: Group): vscode.MarkdownString {
   }
   md.appendMarkdown(`**Files (${group.fileReferences.length}):**\n\n`);
   for (const f of group.fileReferences) {
-    md.appendMarkdown(`• \`${f.relativePath}\`\n\n`);
+    const fileMode = f.overrideContextMode?.type || 'default';
+    md.appendMarkdown(`• \`${f.relativePath}\` [${fileMode}]\n\n`);
   }
   md.appendMarkdown(`\n_Last updated: ${group.updatedAt.toLocaleString()}_`);
   return md;
@@ -120,6 +139,11 @@ export class GroupTreeProvider implements vscode.TreeDataProvider<GroupTreeNode>
       } else {
         return sorted.filter(g => !g.isBookmarked).map(g => new GroupItem(g));
       }
+    }
+
+    // Expand group to show files
+    if (element instanceof GroupItem) {
+      return element.group.fileReferences.map((file, index) => new FileItem(element.group.id, file, index));
     }
 
     return [];

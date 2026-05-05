@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {
@@ -148,6 +148,35 @@
       {
         "command": "copygroups.openWebviewInEditor",
         "title": "Copy Groups: Open Webview in Editor"
+      },
+      {
+        "command": "copygroups.history.addFilesToGroup",
+        "title": "Add All Files to Group",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "copygroups.history.addFileToGroup",
+        "title": "Add File to Group",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "copygroups.cycleFileModeUp",
+        "title": "Previous Mode",
+        "icon": "$(chevron-up)"
+      },
+      {
+        "command": "copygroups.cycleFileModeDown",
+        "title": "Next Mode",
+        "icon": "$(chevron-down)"
+      },
+      {
+        "command": "copygroups.setFileMode",
+        "title": "Set File Mode"
+      },
+      {
+        "command": "copygroups.openFile",
+        "title": "Open File",
+        "icon": "$(go-to-file)"
       }
     ],
     "viewsContainers": {
@@ -155,7 +184,7 @@
         {
           "id": "copygroups",
           "title": "Copy Groups",
-          "icon": "resources/icon.svg"
+          "icon": "$(files)"
         }
       ]
     },
@@ -278,6 +307,46 @@
         {
           "command": "copygroups.history.delete",
           "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "copygroups.history.addFilesToGroup",
+          "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "1_copy@3"
+        },
+        {
+          "command": "copygroups.history.addFileToGroup",
+          "when": "view == copygroups.history && viewItem == fileItem",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "copygroups.cycleFileModeUp",
+          "when": "view == copygroups.groups && viewItem == groupFileItem",
+          "group": "inline@1"
+        },
+        {
+          "command": "copygroups.cycleFileModeDown",
+          "when": "view == copygroups.groups && viewItem == groupFileItem",
+          "group": "inline@2"
+        },
+        {
+          "command": "copygroups.removeFileFromGroup",
+          "when": "view == copygroups.groups && viewItem == groupFileItem",
+          "group": "inline@3"
+        },
+        {
+          "command": "copygroups.setFileMode",
+          "when": "view == copygroups.groups && viewItem == groupFileItem",
+          "group": "1_mode@1"
+        },
+        {
+          "command": "copygroups.openFile",
+          "when": "view == copygroups.groups && viewItem == groupFileItem",
+          "group": "2_nav@1"
+        },
+        {
+          "command": "copygroups.removeFileFromGroup",
+          "when": "view == copygroups.groups && viewItem == groupFileItem",
           "group": "3_delete@1"
         }
       ]

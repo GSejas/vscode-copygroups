@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { GroupRepository } from './infrastructure/repositories/GroupRepository';
 import { CopyHistoryRepository } from './infrastructure/repositories/CopyHistoryRepository';
 import { ConfigRepository } from './infrastructure/repositories/ConfigRepository';
+import { PrepromptRepository } from './infrastructure/repositories/PrepromptRepository';
 import { VSCodeFileProvider } from './infrastructure/adapters/VSCodeFileProvider';
 
 // Application
@@ -15,17 +16,15 @@ import { GroupService } from './application/services/GroupService';
 import { ContextExtractionService } from './application/services/ContextExtractionService';
 import { ExportService } from './application/services/ExportService';
 import { CopyHistoryService } from './application/services/CopyHistoryService';
+import { PrepromptService } from './application/services/PrepromptService';
 
 // Domain
 import { ContextModeType } from './domain/valueObjects/ContextMode';
-import { SYSTEM_PREPROMPTS } from './domain/entities/Preprompt';
 import { RepositoryMetadata } from './domain/valueObjects/FileReference';
 
 // Presentation
-import { GroupTreeProvider, GroupItem } from './presentation/treeview/GroupTreeProvider';
-import { HistoryTreeProvider, HistoryItem } from './presentation/treeview/HistoryTreeProvider';
-import { CopyGroupsWebviewProvider } from './presentation/webview/CopyGroupsWebviewProvider';
-
+import { GroupTreeProvider, GroupItem, FileItem as GroupFileItem } from './presentation/treeview/GroupTreeProvider';
+import { HistoryTreeProvider, HistoryItem, FileItem as HistoryFileItem } from './presentation/treeview/HistoryTreeProvider';
 // Utils
 import { PatternMatcher } from './utils/patternMatcher';
 
@@ -71,6 +70,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const historyService = new CopyHistoryService(historyRepo);
   const exportService = new ExportService(contextExtraction, fileProvider, historyService, configRepo);
 
+  const prepromptRepo = new PrepromptRepository();
+  await prepromptRepo.initialize();
+  const prepromptService = new PrepromptService(prepromptRepo);
+
   // ── Presentation ──────────────────────────────────────────────────────────
   const groupProvider = new GroupTreeProvider(groupService);
   const historyProvider = new HistoryTreeProvider(historyService);
@@ -86,22 +89,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeDataProvider: historyProvider,
     showCollapseAll: true,
   });
-
-  // ── Unified Sidebar Webview ───────────────────────────────────────────────
-  const webviewProvider = new CopyGroupsWebviewProvider(
-    context,
-    groupService,
-    historyService,
-    exportService,
-    configRepo
-  );
-
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      CopyGroupsWebviewProvider.viewType,
-      webviewProvider
-    )
-  );
 
   // ── Group commands ────────────────────────────────────────────────────────
 
@@ -407,11 +394,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const group = await groupService.getGroup(groupId);
         if (!group) return;
 
+        const allPreprompts = prepromptService.getAllPreprompts();
         const options = [
-          { label: 'None', description: 'Remove preprompt', preprompt: undefined as typeof SYSTEM_PREPROMPTS[string] | undefined },
-          ...Object.values(SYSTEM_PREPROMPTS).map(p => ({
+          { label: 'None', description: 'Remove preprompt', preprompt: undefined as any },
+          ...allPreprompts.map(p => ({
             label: p.name,
-            description: p.mode,
+            description: `${p.mode}${p.isSystem ? '' : ' (custom)'}`,
             preprompt: p,
           })),
         ];
@@ -428,6 +416,250 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         );
       }
     )
+  );
+
+  // ── File-level commands ───────────────────────────────────────────────────
+
+  const FILE_MODES = ['full', 'skeleton', 'docstring', 'headers', 'head-tail', 'smart'] as const;
+
+  async function cycleFileMode(item: GroupFileItem, direction: number): Promise<void> {
+    try {
+      const { groupId, fileIndex } = item;
+      const group = await groupService.getGroup(groupId);
+      if (!group || !group.fileReferences[fileIndex]) return;
+      const currentMode = group.fileReferences[fileIndex].overrideContextMode?.type || 'full';
+      const currentIndex = FILE_MODES.indexOf(currentMode as typeof FILE_MODES[number]);
+      const nextIndex = (currentIndex + direction + FILE_MODES.length) % FILE_MODES.length;
+      await groupService.setFileMode(groupId, fileIndex, { type: FILE_MODES[nextIndex] });
+      groupProvider.refresh();
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to change file mode: ${err}`);
+    }
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.cycleFileModeUp',
+      (item: GroupFileItem) => cycleFileMode(item, -1)
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.cycleFileModeDown',
+      (item: GroupFileItem) => cycleFileMode(item, 1)
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.setFileMode',
+      async (item: GroupFileItem) => {
+        const { groupId, fileIndex } = item;
+        const group = await groupService.getGroup(groupId);
+        if (!group || !group.fileReferences[fileIndex]) return;
+
+        const currentMode = group.fileReferences[fileIndex].overrideContextMode?.type || 'full';
+        const selected = await vscode.window.showQuickPick(
+          FILE_MODES.map(m => ({ label: m, description: m === currentMode ? '(current)' : '' })),
+          { placeHolder: `Mode for "${group.fileReferences[fileIndex].relativePath}"` }
+        );
+        if (!selected) return;
+
+        await groupService.setFileMode(groupId, fileIndex, { type: selected.label as ContextModeType });
+        groupProvider.refresh();
+        vscode.window.showInformationMessage(`File mode set to "${selected.label}".`);
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.openFile',
+      async (item: GroupFileItem) => {
+        try {
+          const uri = vscode.Uri.parse(item.file.uri);
+          await vscode.window.showTextDocument(uri);
+        } catch {
+          vscode.window.showErrorMessage(`Could not open file: ${item.file.relativePath}`);
+        }
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.removeFileFromGroup',
+      async (item: GroupFileItem) => {
+        try {
+          const { groupId, fileIndex } = item;
+          const group = await groupService.getGroup(groupId);
+          if (!group || !group.fileReferences[fileIndex]) return;
+
+          const fileName = group.fileReferences[fileIndex].relativePath;
+          const confirm = await vscode.window.showWarningMessage(
+            `Remove "${fileName}" from group?`,
+            { modal: false },
+            'Remove'
+          );
+          if (confirm !== 'Remove') return;
+
+          await groupService.removeFileByIndex(groupId, fileIndex);
+          groupProvider.refresh();
+          vscode.window.showInformationMessage(`Removed "${fileName}" from group.`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to remove file: ${err}`);
+        }
+      }
+    )
+  );
+
+  // ── Preprompt commands ───────────────────────────────────────────────────
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.createCustomPreprompt', async () => {
+      const name = await vscode.window.showInputBox({
+        prompt: 'Preprompt name',
+        placeHolder: 'e.g. Code Review Template',
+        validateInput: v => v.trim() ? null : 'Name cannot be empty',
+      });
+      if (!name) return;
+
+      const template = await vscode.window.showInputBox({
+        prompt: 'Preprompt template (use {{context}}, {{groupName}}, {{fileCount}}, {{timestamp}}, {{mode}})',
+        placeHolder: 'Review this code: {{context}}',
+        validateInput: v => v.trim() ? null : 'Template cannot be empty',
+      });
+      if (!template) return;
+
+      const mode = await vscode.window.showQuickPick(
+        ['analysis', 'summary', 'review', 'custom'],
+        { placeHolder: 'Select preprompt mode' }
+      );
+      if (!mode) return;
+
+      try {
+        await prepromptService.create(name.trim(), template.trim(), mode);
+        vscode.window.showInformationMessage(`Custom preprompt "${name.trim()}" created.`);
+      } catch (err) {
+        vscode.window.showErrorMessage(`Failed to create preprompt: ${err}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.editPreprompt', async () => {
+      const customPreprompts = prepromptService.getCustomPreprompts();
+      if (customPreprompts.length === 0) {
+        vscode.window.showInformationMessage('No custom preprompts to edit. Create one first.');
+        return;
+      }
+
+      const selected = await vscode.window.showQuickPick(
+        customPreprompts.map(p => ({ label: p.name, description: p.mode, prepromptId: p.id })),
+        { placeHolder: 'Select a preprompt to edit' }
+      );
+      if (!selected) return;
+
+      const preprompt = prepromptService.getById(selected.prepromptId);
+      if (!preprompt) return;
+
+      const newName = await vscode.window.showInputBox({
+        prompt: 'Preprompt name',
+        value: preprompt.name,
+        validateInput: v => v.trim() ? null : 'Name cannot be empty',
+      });
+      if (newName === undefined) return;
+
+      const newTemplate = await vscode.window.showInputBox({
+        prompt: 'Preprompt template',
+        value: preprompt.template,
+        validateInput: v => v.trim() ? null : 'Template cannot be empty',
+      });
+      if (newTemplate === undefined) return;
+
+      const newMode = await vscode.window.showQuickPick(
+        ['analysis', 'summary', 'review', 'custom'],
+        { placeHolder: `Current mode: ${preprompt.mode}` }
+      );
+      if (!newMode) return;
+
+      try {
+        await prepromptService.update(preprompt.id, newName.trim(), newTemplate.trim(), newMode);
+        vscode.window.showInformationMessage(`Preprompt "${newName.trim()}" updated.`);
+      } catch (err) {
+        vscode.window.showErrorMessage(`Failed to update preprompt: ${err}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.deletePreprompt', async () => {
+      const customPreprompts = prepromptService.getCustomPreprompts();
+      if (customPreprompts.length === 0) {
+        vscode.window.showInformationMessage('No custom preprompts to delete.');
+        return;
+      }
+
+      const selected = await vscode.window.showQuickPick(
+        customPreprompts.map(p => ({ label: p.name, description: p.mode, prepromptId: p.id })),
+        { placeHolder: 'Select a preprompt to delete' }
+      );
+      if (!selected) return;
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete preprompt "${selected.label}"?`,
+        { modal: true },
+        'Delete'
+      );
+      if (confirm !== 'Delete') return;
+
+      try {
+        await prepromptService.delete(selected.prepromptId);
+        vscode.window.showInformationMessage(`Preprompt "${selected.label}" deleted.`);
+      } catch (err) {
+        vscode.window.showErrorMessage(`Failed to delete preprompt: ${err}`);
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.managePreprompts', async () => {
+      const allPreprompts = prepromptService.getAllPreprompts();
+      if (allPreprompts.length === 0) {
+        vscode.window.showInformationMessage('No preprompts available.');
+        return;
+      }
+
+      const selected = await vscode.window.showQuickPick(
+        [
+          { label: '+ Create Custom', action: 'create' },
+          { label: '─'.repeat(20), action: 'separator' },
+          ...allPreprompts.map(p => ({
+            label: p.name,
+            description: `${p.mode}${p.isSystem ? '' : ' (custom)'}`,
+            prepromptId: p.id,
+            action: p.isSystem ? 'view' : 'edit',
+          })),
+        ],
+        { placeHolder: 'Manage preprompts' }
+      );
+      if (!selected) return;
+
+      if (selected.action === 'create') {
+        await vscode.commands.executeCommand('copygroups.createCustomPreprompt');
+      } else if (selected.action === 'edit' && 'prepromptId' in selected) {
+        const action = await vscode.window.showQuickPick(
+          ['Edit', 'Delete'],
+          { placeHolder: `Options for "${selected.label}"` }
+        );
+        if (action === 'Edit') {
+          await vscode.commands.executeCommand('copygroups.editPreprompt');
+        } else if (action === 'Delete') {
+          await vscode.commands.executeCommand('copygroups.deletePreprompt');
+        }
+      }
+    })
   );
 
   // ── History commands ──────────────────────────────────────────────────────
@@ -545,6 +777,83 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.history.addFilesToGroup',
+      async (item: HistoryItem) => {
+        const groups = await groupService.getAllGroups();
+        if (groups.length === 0) {
+          const create = await vscode.window.showWarningMessage(
+            'No groups yet. Create one first?',
+            'Create Group'
+          );
+          if (create) await vscode.commands.executeCommand('copygroups.createGroup');
+          return;
+        }
+
+        const picks = groups
+          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+          .map(g => ({ label: g.name, description: `${g.fileReferences.length} file(s)`, groupId: g.id }));
+
+        const chosen = await vscode.window.showQuickPick(picks, {
+          placeHolder: 'Add all files to which group?',
+        });
+        if (!chosen) return;
+
+        let addedCount = 0;
+        for (const f of item.entry.files.filter(f => !f.error)) {
+          try {
+            const fileVscodeUri = vscode.Uri.parse(f.uri);
+            const repoMetadata = getRepositoryMetadata(fileVscodeUri);
+            await groupService.addFileToGroup(chosen.groupId, f.uri, f.relativePath, repoMetadata);
+            addedCount++;
+          } catch {
+            // skip duplicates or unreachable files
+          }
+        }
+
+        groupProvider.refresh();
+        vscode.window.showInformationMessage(`Added ${addedCount} file(s) to "${chosen.label}".`);
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'copygroups.history.addFileToGroup',
+      async (item: HistoryFileItem) => {
+        const groups = await groupService.getAllGroups();
+        if (groups.length === 0) {
+          const create = await vscode.window.showWarningMessage(
+            'No groups yet. Create one first?',
+            'Create Group'
+          );
+          if (create) await vscode.commands.executeCommand('copygroups.createGroup');
+          return;
+        }
+
+        const picks = groups
+          .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+          .map(g => ({ label: g.name, description: `${g.fileReferences.length} file(s)`, groupId: g.id }));
+
+        const chosen = await vscode.window.showQuickPick(picks, {
+          placeHolder: `Add "${item.fileName}" to which group?`,
+        });
+        if (!chosen) return;
+
+        try {
+          const fileVscodeUri = vscode.Uri.parse(item.fileUri);
+          const repoMetadata = getRepositoryMetadata(fileVscodeUri);
+          await groupService.addFileToGroup(chosen.groupId, item.fileUri, item.filePath, repoMetadata);
+          groupProvider.refresh();
+          vscode.window.showInformationMessage(`Added "${item.fileName}" to "${chosen.label}".`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to add file: ${err}`);
+        }
+      }
+    )
+  );
+
   // ── Sync command ──────────────────────────────────────────────────────────
 
   context.subscriptions.push(
@@ -554,17 +863,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
-  // ── Open webview in focused view ───────────────────────────────────────────
+  // ── Multi-window state syncing ────────────────────────────────────────────
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copygroups.openWebviewInEditor', async () => {
-      // Focus the webview view in the sidebar
-      // This brings it to the foreground and maximizes visibility
-      await vscode.commands.executeCommand('copygroups.sidebar.focus');
-    })
-  );
+  // Set up file watcher for GroupRepository changes from other instances
+  groupRepo.setupFileWatcher(context.extensionPath);
+
+  // Subscribe to repository changes and refresh tree views
+  const groupObserver = {
+    onStateChanged: () => {
+      console.log('[Extension] Groups changed, refreshing tree view...');
+      groupProvider.refresh();
+    },
+  };
+
+  const configObserver = {
+    onStateChanged: () => {
+      console.log('[Extension] Config changed');
+    },
+  };
+
+  groupRepo.subscribe(groupObserver);
+  configRepo.subscribe(configObserver);
+
+  // Store references for cleanup
+  const disposeResources = () => {
+    groupRepo.unsubscribe(groupObserver);
+    configRepo.unsubscribe(configObserver);
+    groupRepo.dispose();
+  };
+
+  context.subscriptions.push({ dispose: disposeResources });
+
 }
 
 export function deactivate(): void {
-  // Nothing to clean up
+  // Subscriptions are automatically disposed via context.subscriptions
+  console.log('[Extension] Deactivating copygroups...');
 }

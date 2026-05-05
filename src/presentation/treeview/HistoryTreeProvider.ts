@@ -34,7 +34,8 @@ export class FileItem extends vscode.TreeItem {
   constructor(
     public readonly fileName: string,
     public readonly filePath: string,
-    public readonly hasError: boolean
+    public readonly hasError: boolean,
+    public readonly fileUri: string
   ) {
     super(fileName, vscode.TreeItemCollapsibleState.None);
     this.description = filePath;
@@ -133,7 +134,7 @@ export class HistoryTreeProvider implements vscode.TreeDataProvider<HistoryTreeN
     if (element instanceof HistoryItem) {
       return element.entry.files.map(f => {
         const fileName = f.relativePath.split(/[\\/]/).pop() || f.relativePath;
-        return new FileItem(fileName, f.relativePath, !!f.error);
+        return new FileItem(fileName, f.relativePath, !!f.error, f.uri);
       });
     }
 
