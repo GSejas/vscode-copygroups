@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.3] — 2026-05-05
+
+### Added
+- **Rich copy notifications** — after copying a group, notification now shows:
+  - Final output size (in KB)
+  - Number of successfully included files
+  - ⚠ Count of files that failed/were excluded (if any)
+  - Example: `Copied "Auth Module" (42.3 KB · 8 files) ⚠ 2 errors`
+
+- **Error summaries in preprompt output** — when files fail to copy (too large, missing, binary, etc.), a warnings section is now appended to the bottom of the preprompt output:
+  - Lists all excluded files with reasons
+  - Format: `**⚠ Warnings (X files excluded):** - file.txt: File too large (2048 KB)`
+  - Ensures users see exactly what was included/excluded
+
+### Fixed
+- **`copyGroup()` return value** — now returns `{ output: string; snapshots: CopiedFileSnapshot[] }` instead of `void`, enabling callers to inspect what was actually copied (success count, error count, size, etc.)
+
+## [0.2.2] — 2026-05-05
+
+### Fixed
+- **Preprompt drops file context when `{{context}}` is missing** — if a custom preprompt template did not include the `{{context}}` placeholder, the copied output contained only the prompt text with no file content. File context is now automatically appended at the end of the output when the template omits `{{context}}`.
+
 ## [0.2.1] — 2026-05-05
 
 ### Fixed

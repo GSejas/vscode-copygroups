@@ -311,9 +311,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.window.showErrorMessage('Group not found.');
         return;
       }
-      await exportService.copyGroup(group);
+      const { output, snapshots } = await exportService.copyGroup(group);
       historyProvider.refresh();
-      vscode.window.showInformationMessage(`Copied "${group.name}" to clipboard.`);
+      
+      // Build notification with copy details
+      const successCount = snapshots.filter(s => !s.error).length;
+      const errorCount = snapshots.filter(s => s.error).length;
+      const sizeKb = (output.length / 1024).toFixed(1);
+      
+      let message = `Copied "${group.name}" (${sizeKb} KB · ${successCount} file${successCount !== 1 ? 's' : ''})`;
+      if (errorCount > 0) {
+        message += ` ⚠ ${errorCount} error${errorCount !== 1 ? 's' : ''}`;
+      }
+      
+      vscode.window.showInformationMessage(message);
+    
     })
   );
 

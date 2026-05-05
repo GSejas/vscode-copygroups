@@ -46,6 +46,7 @@ Right-click a group → **Set Preprompt** to choose from built-in templates:
 **Custom Preprompts** — create, edit, and manage your own templates:
 - Command palette: `Ctrl+Shift+P` → **Create Custom Preprompt**
 - Define name, template text (with `{{variable}}` substitution), and mode
+- Use `{{context}}` to position file content inside your template — if omitted, file content is appended automatically
 - Stored in `~/.vscode-copygroups/` — shared across all VS Code instances
 - Edit and delete custom templates via command palette
 

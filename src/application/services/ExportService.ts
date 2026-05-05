@@ -208,10 +208,11 @@ export class ExportService {
     await this.historyService.record(source, output, snapshots, 'folder-contents');
   }
 
-  async copyGroup(group: Group): Promise<void> {
+  async copyGroup(group: Group): Promise<{ output: string; snapshots: CopiedFileSnapshot[] }> {
     const { output, snapshots } = await this.buildOutput(group);
     await vscode.env.clipboard.writeText(output);
     await this.historyService.record(group, output, snapshots, 'clipboard');
+    return { output, snapshots };
   }
 
   async exportToMarkdown(group: Group, options: ExportOptions = {}): Promise<string> {
@@ -618,6 +619,12 @@ export class ExportService {
       })
       .join('\n\n');
 
+    // Build error summary if any files failed
+    const errorSnapshots = snapshots.filter(s => s.error);
+    const errorSummary = errorSnapshots.length > 0
+      ? `\n\n**⚠ Warnings (${errorSnapshots.length} file${errorSnapshots.length !== 1 ? 's' : ''} excluded):**\n${errorSnapshots.map(s => `- ${s.relativePath}: ${s.error}`).join('\n')}`
+      : '';
+
     const variables: Record<string, string> = {
       context: contextText,
       groupName: group.name,
@@ -627,10 +634,22 @@ export class ExportService {
       ...group.preprompt.variables,
     };
 
+    const hasContextPlaceholder = group.preprompt.template.includes('{{context}}');
+
     let result = group.preprompt.template;
     for (const [key, value] of Object.entries(variables)) {
       result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
     }
+
+    if (!hasContextPlaceholder && contextText) {
+      result = result + '\n\n' + contextText;
+    }
+    
+    // Always append error summary at the very end
+    if (errorSummary) {
+      result = result + errorSummary;
+    }
+
     return result;
   }
 
