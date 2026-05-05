@@ -137,11 +137,7 @@ export class ContextExtractionService {
     const tail = lines.slice(-tailLines);
     const omittedCount = totalLines - headLines - tailLines;
 
-    return [
-      ...head,
-      `\n... (${omittedCount} lines omitted) ...\n`,
-      ...tail,
-    ].join('\n');
+    return [...head, `... (${omittedCount} lines omitted) ...`, ...tail].join('\n');
   }
 
   private extractSmartContext(content: string, language: string | null, heuristic?: string): string {
