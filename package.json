@@ -110,6 +110,22 @@
         "title": "Copy Groups: Set Preprompt"
       },
       {
+        "command": "copygroups.createCustomPreprompt",
+        "title": "Copy Groups: Create Custom Preprompt"
+      },
+      {
+        "command": "copygroups.editPreprompt",
+        "title": "Copy Groups: Edit Preprompt"
+      },
+      {
+        "command": "copygroups.deletePreprompt",
+        "title": "Copy Groups: Delete Preprompt"
+      },
+      {
+        "command": "copygroups.managePreprompts",
+        "title": "Copy Groups: Manage Preprompts"
+      },
+      {
         "command": "copygroups.removeFileFromGroup",
         "title": "Copy Groups: Remove File from Group",
         "icon": "$(trash)"
@@ -284,6 +300,21 @@
           "command": "copygroups.deleteGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "3_delete@1"
+        },
+        {
+          "command": "copygroups.history.recopy",
+          "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "inline@1"
+        },
+        {
+          "command": "copygroups.history.toggleFavourite",
+          "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "copygroups.history.delete",
+          "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "inline@3"
         },
         {
           "command": "copygroups.history.recopy",
