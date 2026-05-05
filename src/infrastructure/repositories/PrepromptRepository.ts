@@ -116,4 +116,11 @@ export class PrepromptRepository {
       updatedAt: new Date(data.updatedAt),
     };
   }
+
+  /**
+   * Get the path to the storage file
+   */
+  getStoragePath(): string {
+    return this.storage.getStoragePath();
+  }
 }

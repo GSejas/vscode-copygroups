@@ -550,6 +550,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         await prepromptService.create(name.trim(), template.trim(), mode);
         vscode.window.showInformationMessage(`Custom preprompt "${name.trim()}" created.`);
+        
+        // Open the JSON file to show the new preprompt
+        const storagePath = prepromptRepo.getStoragePath();
+        const fileUri = vscode.Uri.file(storagePath);
+        await vscode.commands.executeCommand('vscode.open', fileUri);
       } catch (err) {
         vscode.window.showErrorMessage(`Failed to create preprompt: ${err}`);
       }
@@ -596,6 +601,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         await prepromptService.update(preprompt.id, newName.trim(), newTemplate.trim(), newMode);
         vscode.window.showInformationMessage(`Preprompt "${newName.trim()}" updated.`);
+        
+        // Open the JSON file to show changes
+        const storagePath = prepromptRepo.getStoragePath();
+        const fileUri = vscode.Uri.file(storagePath);
+        await vscode.commands.executeCommand('vscode.open', fileUri);
       } catch (err) {
         vscode.window.showErrorMessage(`Failed to update preprompt: ${err}`);
       }
@@ -626,6 +636,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         await prepromptService.delete(selected.prepromptId);
         vscode.window.showInformationMessage(`Preprompt "${selected.label}" deleted.`);
+        
+        // Open the JSON file to show changes
+        const storagePath = prepromptRepo.getStoragePath();
+        const fileUri = vscode.Uri.file(storagePath);
+        await vscode.commands.executeCommand('vscode.open', fileUri);
       } catch (err) {
         vscode.window.showErrorMessage(`Failed to delete preprompt: ${err}`);
       }
