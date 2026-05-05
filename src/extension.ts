@@ -285,9 +285,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ── Command: copy a group to clipboard ───────────────────────────────────
   context.subscriptions.push(
-    vscode.commands.registerCommand('copygroups.copyGroup', async (arg: GroupItem | string) => {
-      const groupId = arg instanceof GroupItem ? arg.group.id : arg;
-      const group = await groupService.getGroup(groupId);
+    vscode.commands.registerCommand('copygroups.copyGroup', async (arg?: GroupItem | string) => {
+      let groupId: string | undefined;
+      if (arg instanceof GroupItem) {
+        groupId = arg.group.id;
+      } else if (typeof arg === 'string') {
+        groupId = arg;
+      } else {
+        // Keybinding with no context — show picker
+        const groups = await groupService.getAllGroups();
+        if (groups.length === 0) {
+          vscode.window.showWarningMessage('No groups yet. Create one first with Ctrl+Shift+G.');
+          return;
+        }
+        const picked = await vscode.window.showQuickPick(
+          groups.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+            .map(g => ({ label: g.name, description: `${g.fileReferences.length} file(s) · ${g.contextMode.type}`, groupId: g.id })),
+          { placeHolder: 'Copy which group to clipboard?' }
+        );
+        if (!picked) return;
+        groupId = picked.groupId;
+      }
+      const group = await groupService.getGroup(groupId!);
       if (!group) {
         vscode.window.showErrorMessage('Group not found.');
         return;
@@ -655,9 +674,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ── History commands ──────────────────────────────────────────────────────
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('copygroups.history.recopy', async (entryId: string) => {
+    vscode.commands.registerCommand('copygroups.history.recopy', async (item: HistoryItem | string) => {
+      const id = item instanceof HistoryItem ? item.entry.id : item;
       try {
-        await historyService.recopy(entryId);
+        await historyService.recopy(id);
         vscode.window.showInformationMessage('Re-copied to clipboard.');
       } catch {
         vscode.window.showErrorMessage('Failed to re-copy: entry not found.');
@@ -850,6 +870,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('copygroups.syncViews', () => {
       groupProvider.refresh();
       historyProvider.refresh();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.openWebviewInEditor', async () => {
+      await vscode.commands.executeCommand('copygroups.sidebar.focus');
     })
   );
 
