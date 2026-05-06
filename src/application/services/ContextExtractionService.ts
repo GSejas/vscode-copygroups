@@ -93,8 +93,47 @@ export class ContextExtractionService {
       return this.pythonExtractor.extractSkeleton(content);
     }
 
+    if (language === 'markdown') {
+      return this.genericExtractMarkdownSkeleton(content);
+    }
+
     // Generic skeleton extraction using regex
     return this.genericExtractSkeleton(content);
+  }
+
+  private genericExtractMarkdownSkeleton(content: string): string {
+    const lines = content.split('\n');
+    const result: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Match markdown headers (# ## ### etc)
+      if (trimmed.startsWith('#')) {
+        result.push(line);
+        continue;
+      }
+
+      // Match markdown links [text](url)
+      if (trimmed.includes('[') && trimmed.includes(']')) {
+        result.push(line);
+        continue;
+      }
+
+      // Match code fence markers
+      if (trimmed.startsWith('```')) {
+        result.push(line);
+        continue;
+      }
+
+      // Match list items
+      if (trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('+') || /^\d+\./.test(trimmed)) {
+        result.push(line);
+        continue;
+      }
+    }
+
+    return result.join('\n');
   }
 
   private genericExtractSkeleton(content: string): string {

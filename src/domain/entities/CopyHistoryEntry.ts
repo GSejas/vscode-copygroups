@@ -24,6 +24,8 @@ export interface CopiedFileSnapshot {
   contextMode: ContextMode;
   /** Whether the file was missing/unreadable at copy time */
   error?: string;
+  /** Original file size in bytes (undefined for error snapshots) */
+  sizeBytes?: number;
 }
 
 export interface CopyHistoryEntry {

@@ -6,6 +6,8 @@
  */
 
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
+import * as os from 'os';
 import { Group } from '../../domain/entities/Group';
 import { CopiedFileSnapshot } from '../../domain/entities/CopyHistoryEntry';
 import { ContextMode, ContextModeType } from '../../domain/valueObjects/ContextMode';
@@ -171,7 +173,7 @@ export class ExportService {
         }
 
         relativePaths.push(relativePath);
-        snapshots.push({ uri: fileUri, relativePath, extractedContent: content, contextMode });
+        snapshots.push({ uri: fileUri, relativePath, extractedContent: content, contextMode, sizeBytes: stat.size });
         totalSize += size;
         fileCount++;
       } catch (err) {
@@ -473,7 +475,7 @@ export class ExportService {
         }
 
         const extractedContent = await this.contextExtraction.extract(fileRef.uri, effectiveMode);
-        snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent, contextMode: effectiveMode });
+        snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent, contextMode: effectiveMode, sizeBytes: stat.size });
       } catch (err) {
         snapshots.push({ uri: fileRef.uri, relativePath: fileRef.relativePath, extractedContent: '', contextMode: effectiveMode, error: String(err) });
       }
@@ -779,4 +781,28 @@ function getLanguageTag(relativePath: string): string {
 
   const ext = lower.split('.').pop() || '';
   return EXT_TO_LANG[ext] || '';
+}
+
+function computeContentHash(content: string): string {
+  return crypto.createHash('sha1').update(content).digest('hex').slice(0, 7);
+}
+
+function getOsLabel(): string {
+  return `${os.platform()} ${os.release()}`;
+}
+
+function buildDocumentHeader(successCount: number, totalSizeBytes: number, workspacePath: string): string {
+  const timestamp = new Date().toISOString();
+  const sizeKB = (totalSizeBytes / 1024).toFixed(1);
+  return `---\ncopied: ${timestamp}\nworkspace: ${workspacePath}\nos: ${getOsLabel()}\nfiles: ${successCount} · ${sizeKB} KB\n---\n\n`;
+}
+
+function renderFileHeader(snap: CopiedFileSnapshot, headingLevel = '##'): string {
+  const fullPath = vscode.Uri.parse(snap.uri).fsPath;
+  if (snap.error) {
+    return `${headingLevel} ${snap.relativePath}\n`;
+  }
+  const hash = computeContentHash(snap.extractedContent);
+  const sizeLabel = snap.sizeBytes !== undefined ? ` · ${(snap.sizeBytes / 1024).toFixed(1)} KB` : '';
+  return `${headingLevel} ${snap.relativePath}\n> \`${fullPath}\` · sha7: \`${hash}\`${sizeLabel}\n\n`;
 }

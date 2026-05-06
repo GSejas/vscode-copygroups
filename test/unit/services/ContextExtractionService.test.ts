@@ -152,4 +152,77 @@ def standalone_function(x):
       expect(result).toContain('Class docstring');
     });
   });
+
+  describe('markdown-specific extraction', () => {
+    const MD_CONTENT = `# Project Overview
+
+This is a long description that should not appear in skeleton mode.
+
+## Features
+
+- Feature 1 with details here
+- Feature 2 with more details
+- Feature 3
+
+### Subsection
+
+More content that is not extracted in skeleton mode.
+
+## Links and References
+
+[GitHub Repository](https://github.com/example/repo)
+[Documentation](https://docs.example.com)
+
+\`\`\`typescript
+// Code example
+const x = 42;
+\`\`\`
+
+### Implementation Details
+
+This section contains lots of details that should not be included in skeleton mode.
+`;
+
+    it('skeleton mode extracts markdown headers', async () => {
+      const svc = new ContextExtractionService(makeProvider(MD_CONTENT, 'markdown'));
+      const result = await svc.extract('file:///README.md', { type: 'skeleton' });
+      expect(result).toContain('# Project Overview');
+      expect(result).toContain('## Features');
+      expect(result).toContain('### Subsection');
+    });
+
+    it('skeleton mode extracts markdown lists', async () => {
+      const svc = new ContextExtractionService(makeProvider(MD_CONTENT, 'markdown'));
+      const result = await svc.extract('file:///README.md', { type: 'skeleton' });
+      expect(result).toContain('- Feature 1');
+      expect(result).toContain('- Feature 2');
+    });
+
+    it('skeleton mode extracts markdown links', async () => {
+      const svc = new ContextExtractionService(makeProvider(MD_CONTENT, 'markdown'));
+      const result = await svc.extract('file:///README.md', { type: 'skeleton' });
+      expect(result).toContain('[GitHub Repository]');
+      expect(result).toContain('[Documentation]');
+    });
+
+    it('skeleton mode includes code fence markers', async () => {
+      const svc = new ContextExtractionService(makeProvider(MD_CONTENT, 'markdown'));
+      const result = await svc.extract('file:///README.md', { type: 'skeleton' });
+      expect(result).toContain('```typescript');
+    });
+
+    it('skeleton mode omits long prose content', async () => {
+      const svc = new ContextExtractionService(makeProvider(MD_CONTENT, 'markdown'));
+      const result = await svc.extract('file:///README.md', { type: 'skeleton' });
+      expect(result).not.toContain('This is a long description');
+      expect(result).not.toContain('This section contains lots');
+    });
+
+    it('full mode returns entire markdown content', async () => {
+      const svc = new ContextExtractionService(makeProvider(MD_CONTENT, 'markdown'));
+      const result = await svc.extract('file:///README.md', { type: 'full' });
+      expect(result).toBe(MD_CONTENT);
+      expect(result).toContain('This is a long description');
+    });
+  });
 });
