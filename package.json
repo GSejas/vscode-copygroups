@@ -222,12 +222,6 @@
           "id": "copygroups.history",
           "name": "Copy History",
           "when": "true"
-        },
-        {
-          "id": "copygroups.sidebar",
-          "name": "Copy Groups (Webview)",
-          "type": "webview",
-          "when": "true"
         }
       ]
     },

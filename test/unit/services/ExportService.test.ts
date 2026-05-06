@@ -297,4 +297,116 @@ describe('ExportService', () => {
       expect(result.snapshots[0]).toHaveProperty('contextMode');
     });
   });
+
+  // ─── Document header metadata ────────────────────────────────────────────────
+
+  describe('document header metadata', () => {
+    it('copyGroup output starts with YAML frontmatter block', async () => {
+      const { exportService } = makeExportService({ 'file:///src/a.ts': 'const a = 1;' });
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///src/a.ts', relativePath: 'src/a.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' }, tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      const { output } = await exportService.copyGroup(group);
+      expect(output).toMatch(/^---\n/);
+      expect(output).toContain('copied:');
+      expect(output).toContain('workspace:');
+      expect(output).toContain('os:');
+      expect(output).toContain('files:');
+      expect(output).toContain('\n---\n');
+    });
+
+    it('copyGroup header contains ISO timestamp', async () => {
+      const { exportService } = makeExportService({ 'file:///src/a.ts': 'x' });
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///src/a.ts', relativePath: 'src/a.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' }, tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      const { output } = await exportService.copyGroup(group);
+      expect(output).toMatch(/copied: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    });
+
+    it('copySelectedFiles output contains document header', async () => {
+      const { exportService } = makeExportService({ 'file:///src/foo.ts': 'const x = 1;' });
+      await exportService.copySelectedFiles(['file:///src/foo.ts'], { type: 'full' });
+      const output = (env.clipboard.writeText as jest.Mock).mock.calls[0][0] as string;
+      expect(output).toMatch(/^---\n/);
+      expect(output).toContain('copied:');
+    });
+
+    it('per-file block includes sha7 hash annotation', async () => {
+      const { exportService } = makeExportService({ 'file:///src/a.ts': 'const a = 1;' });
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///src/a.ts', relativePath: 'src/a.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' }, tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      const { output } = await exportService.copyGroup(group);
+      expect(output).toMatch(/sha7: `[0-9a-f]{7}`/);
+    });
+
+    it('per-file block includes full absolute path', async () => {
+      const { exportService } = makeExportService({ 'file:///src/a.ts': 'const a = 1;' });
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///src/a.ts', relativePath: 'src/a.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' }, tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      const { output } = await exportService.copyGroup(group);
+      // Full path annotation line starts with "> `"
+      expect(output).toMatch(/^> `.*src\/a\.ts`/m);
+    });
+
+    it('per-file sha7 changes when content changes', async () => {
+      const groupBase: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///src/a.ts', relativePath: 'src/a.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' }, tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      const { exportService: svcA } = makeExportService({ 'file:///src/a.ts': 'const a = 1;' });
+      const { output: outA } = await svcA.copyGroup(groupBase);
+      const hashA = outA.match(/sha7: `([0-9a-f]{7})`/)?.[1];
+
+      const { exportService: svcB } = makeExportService({ 'file:///src/a.ts': 'const a = 999;' });
+      const { output: outB } = await svcB.copyGroup(groupBase);
+      const hashB = outB.match(/sha7: `([0-9a-f]{7})`/)?.[1];
+
+      expect(hashA).toBeDefined();
+      expect(hashB).toBeDefined();
+      expect(hashA).not.toBe(hashB);
+    });
+
+    it('snapshot carries sizeBytes from stat', async () => {
+      (workspace.fs.stat as jest.Mock).mockResolvedValue({ size: 4321, type: FileType.File });
+      const { exportService } = makeExportService({ 'file:///src/a.ts': 'const a = 1;' });
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///src/a.ts', relativePath: 'src/a.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' }, tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      const { snapshots } = await exportService.copyGroup(group);
+      expect(snapshots[0].sizeBytes).toBe(4321);
+    });
+
+    it('error snapshots do not get sha7 annotation', async () => {
+      const { exportService } = makeExportService({});
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///gone.ts', relativePath: 'gone.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' }, tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      const { output } = await exportService.copyGroup(group);
+      expect(output).not.toMatch(/sha7:/);
+    });
+  });
 });
