@@ -7,6 +7,9 @@ export interface CopyConfig {
   // Default context mode for new copy operations
   defaultContextMode: string;
 
+  // Language-specific context mode overrides (e.g., { markdown: 'skeleton', python: 'skeleton', robot: 'skeleton' })
+  languageOverrides: Record<string, string>;
+
   // Performance limits
   maxFileCount: number;          // Stop adding files after this count
   maxTotalSizeBytes: number;     // Stop reading file content after this total
@@ -31,7 +34,13 @@ export interface CopyConfig {
 }
 
 export const DEFAULT_COPY_CONFIG: CopyConfig = {
-  defaultContextMode: 'skeleton',
+  defaultContextMode: 'full',
+  languageOverrides: {
+    markdown: 'skeleton',
+    python: 'skeleton',
+    robot: 'skeleton',
+    robotfile: 'skeleton',
+  },
   maxFileCount: 100,
   maxTotalSizeBytes: 5 * 1024 * 1024,        // 5 MB
   maxFileSizeBytes: 1024 * 1024,             // 1 MB per file
@@ -61,6 +70,7 @@ export function validateCopyConfig(config: Partial<CopyConfig>): CopyConfig {
   const defaults = DEFAULT_COPY_CONFIG;
   return {
     defaultContextMode: config.defaultContextMode || defaults.defaultContextMode,
+    languageOverrides: config.languageOverrides || defaults.languageOverrides,
     maxFileCount: Math.max(1, config.maxFileCount || defaults.maxFileCount),
     maxTotalSizeBytes: Math.max(1024, config.maxTotalSizeBytes || defaults.maxTotalSizeBytes),
     maxFileSizeBytes: Math.max(1024, config.maxFileSizeBytes || defaults.maxFileSizeBytes),

@@ -178,6 +178,26 @@ export class GroupService {
     return group;
   }
 
+  async duplicateGroup(groupId: string): Promise<Group> {
+    const source = await this.repository.getById(groupId);
+    if (!source) {
+      throw new Error(`Group ${groupId} not found`);
+    }
+
+    const copy = new GroupEntity({
+      name: `${source.name} (copy)`,
+      description: source.description,
+      fileReferences: source.fileReferences.map(f => ({ ...f })),
+      contextMode: { ...source.contextMode },
+      preprompt: source.preprompt,
+      tags: source.tags.map(t => ({ ...t })),
+      isBookmarked: false,
+    });
+
+    await this.repository.save(copy);
+    return copy;
+  }
+
   async setDescription(groupId: string, description: string | undefined): Promise<Group> {
     const group = await this.repository.getById(groupId);
     if (!group) {

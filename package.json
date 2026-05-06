@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {
@@ -99,7 +99,13 @@
       },
       {
         "command": "copygroups.renameGroup",
-        "title": "Copy Groups: Rename Group"
+        "title": "Copy Groups: Rename Group",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "copygroups.duplicateGroup",
+        "title": "Copy Groups: Duplicate Group",
+        "icon": "$(copy)"
       },
       {
         "command": "copygroups.setGroupMode",
@@ -267,9 +273,19 @@
           "group": "inline@1"
         },
         {
-          "command": "copygroups.deleteGroup",
+          "command": "copygroups.renameGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "inline@2"
+        },
+        {
+          "command": "copygroups.duplicateGroup",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "inline@3"
+        },
+        {
+          "command": "copygroups.deleteGroup",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "inline@4"
         },
         {
           "command": "copygroups.copyGroup",
@@ -287,14 +303,19 @@
           "group": "2_edit@1"
         },
         {
-          "command": "copygroups.setGroupMode",
+          "command": "copygroups.duplicateGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "2_edit@2"
         },
         {
-          "command": "copygroups.setGroupPreprompt",
+          "command": "copygroups.setGroupMode",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "2_edit@3"
+        },
+        {
+          "command": "copygroups.setGroupPreprompt",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "2_edit@4"
         },
         {
           "command": "copygroups.deleteGroup",
@@ -399,6 +420,33 @@
         "key": "ctrl+shift+c",
         "mac": "cmd+shift+c"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Copy Groups",
+      "properties": {
+        "copygroups.context.defaultMode": {
+          "type": "string",
+          "enum": ["full", "skeleton"],
+          "default": "full",
+          "description": "Default context mode for copying files (full: extract all content, skeleton: directory structure only)"
+        },
+        "copygroups.context.languageOverrides": {
+          "type": "object",
+          "default": {
+            "markdown": "skeleton",
+            "python": "skeleton",
+            "robot": "skeleton",
+            "robotfile": "skeleton"
+          },
+          "description": "Per-language context mode overrides (e.g., use skeleton for markdown, python, and robot files)",
+          "patternProperties": {
+            ".*": {
+              "type": "string",
+              "enum": ["full", "skeleton"]
+            }
+          }
+        }
+      }
+    }
   }
 }

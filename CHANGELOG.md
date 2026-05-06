@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.4] — 2026-05-06
+
+### Added
+- **Language-aware context modes** — context mode now automatically adapts to file type:
+  - **Default mode changed to `full`** — extract all file content by default
+  - **Markdown, Python, and Robot files use `skeleton` mode** — directory structure only, no content extraction
+  - Reduces token count for documentation files while preserving full context for code
+  - New settings in VS Code preferences under "Copy Groups > Context":
+    - `copygroups.context.defaultMode` — change global default (full/skeleton)
+    - `copygroups.context.languageOverrides` — customize per-language (e.g., yaml, javascript)
+  - Example: Adding markdown to a group uses skeleton; adding TypeScript still uses full mode
+- **Language detection** — uses VS Code's built-in `TextDocument.languageId` (zero-cost, native support for 1000+ language IDs)
+
+### Changed
+- Default context mode: `skeleton` → `full`
+- File-specific overrides > Language overrides > Group context mode (precedence order)
+
 ## [0.2.3] — 2026-05-05
 
 ### Added

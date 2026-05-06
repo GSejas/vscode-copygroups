@@ -37,6 +37,66 @@ export class ExportService {
     private configRepo: ConfigRepository
   ) {}
 
+  /**
+   * Determines the effective context mode for a file based on language overrides
+   * Maps file extensions to VS Code language IDs and checks config.languageOverrides
+   */
+  private getLanguageIdFromPath(relativePath: string): string | null {
+    const extMatch = relativePath.match(/\.([a-zA-Z0-9]+)$/);
+    if (!extMatch) return null;
+    
+    const ext = extMatch[1].toLowerCase();
+    
+    // Map common file extensions to VS Code language IDs
+    const extToLangId: Record<string, string> = {
+      md: 'markdown',
+      markdown: 'markdown',
+      py: 'python',
+      robot: 'robot',
+      resource: 'robot',
+      ts: 'typescript',
+      tsx: 'typescriptreact',
+      js: 'javascript',
+      jsx: 'javascriptreact',
+      json: 'json',
+      yaml: 'yaml',
+      yml: 'yaml',
+      toml: 'toml',
+      sh: 'shellscript',
+      bash: 'shellscript',
+      zsh: 'shellscript',
+      ps1: 'powershell',
+      dockerfile: 'dockerfile',
+    };
+    
+    return extToLangId[ext] || null;
+  }
+
+  /**
+   * Determines the effective context mode for a file
+   * Considers: language overrides > file overrides > default mode
+   */
+  private async getEffectiveContextMode(
+    config: CopyConfig,
+    fileRef: { overrideContextMode?: ContextMode; relativePath: string },
+    groupContextMode: ContextMode
+  ): Promise<ContextMode> {
+    // 1. Check for file-specific override
+    if (fileRef.overrideContextMode) {
+      return fileRef.overrideContextMode;
+    }
+
+    // 2. Check for language-specific override
+    const languageId = this.getLanguageIdFromPath(fileRef.relativePath);
+    if (languageId && config.languageOverrides[languageId]) {
+      const modeType = config.languageOverrides[languageId] as ContextModeType;
+      return { type: modeType };
+    }
+
+    // 3. Use group's context mode
+    return groupContextMode;
+  }
+
   // ─── Shared file processing ───────────────────────────────────────────────
 
   private async processFiles(
@@ -385,7 +445,7 @@ export class ExportService {
     const snapshots: CopiedFileSnapshot[] = [];
 
     for (const fileRef of group.fileReferences) {
-      const effectiveMode = fileRef.overrideContextMode || group.contextMode;
+      const effectiveMode = await this.getEffectiveContextMode(config, fileRef, group.contextMode);
       try {
         const exists = await this.fileProvider.fileExists(fileRef.uri);
         if (!exists) {

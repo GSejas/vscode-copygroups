@@ -387,6 +387,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand(
+      'copygroups.duplicateGroup',
+      async (arg: GroupItem | string) => {
+        const groupId = arg instanceof GroupItem ? arg.group.id : arg;
+        await groupService.duplicateGroup(groupId);
+        groupProvider.refresh();
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
       'copygroups.setGroupMode',
       async (arg: GroupItem | string) => {
         const groupId = arg instanceof GroupItem ? arg.group.id : arg;
