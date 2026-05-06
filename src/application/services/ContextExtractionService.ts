@@ -16,6 +16,21 @@ export class ContextExtractionService {
     this.pythonExtractor = new PythonContextExtractor();
   }
 
+  /**
+   * Extract file context using the specified mode.
+   * 
+   * Modes:
+   * • 'full'     → 100% content (no reduction)
+   * • 'skeleton' → Structure only: classes, functions, imports, decorators (~70% reduction)
+   *                For markdown: headers, links, lists instead of prose
+   * • 'docstring'→ Comments and documentation only (~80% reduction)
+   * • 'headers'  → First N lines only (default 50)
+   * • 'head-tail'→ First N + last M lines with omission marker (~50% reduction)
+   * • 'smart'    → Language-specific heuristics (auto-detected)
+   * 
+   * All modes are extraction strategies, not "empty" outputs.
+   * Each mode preserves relevant structure while reducing token count where appropriate.
+   */
   async extract(fileUri: string, mode: ContextMode): Promise<string> {
     try {
       const content = await this.fileProvider.getContent(fileUri);

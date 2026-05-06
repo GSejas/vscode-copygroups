@@ -502,6 +502,11 @@ export class ExportService {
   private renderMarkdown(group: Group, snapshots: CopiedFileSnapshot[], config?: CopyConfig): string {
     const parts: string[] = [];
 
+    const successCount = snapshots.filter(s => !s.error).length;
+    const totalSize = snapshots.reduce((sum, s) => sum + (s.sizeBytes ?? 0), 0);
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? 'unknown';
+    parts.push(buildDocumentHeader(successCount, totalSize, workspacePath));
+
     parts.push(`# Files from Group: ${group.name}\n`);
     if (group.description) {
       parts.push(`> ${group.description}\n`);
@@ -519,7 +524,7 @@ export class ExportService {
       const snap = snapshots[i];
       const ref = group.fileReferences[i];
       const repoKey = ref?.repositoryMetadata?.repoName || ref?.repositoryMetadata?.rootPath || 'files';
-      
+
       if (!filesByRepo.has(repoKey)) {
         filesByRepo.set(repoKey, []);
       }
@@ -527,7 +532,7 @@ export class ExportService {
     }
 
     // Check if we have multiple repos
-    const hasMultipleRepos = filesByRepo.size > 1 && 
+    const hasMultipleRepos = filesByRepo.size > 1 &&
       Array.from(filesByRepo.entries()).some(([key]) => key !== 'files' && group.fileReferences.some(f => f.repositoryMetadata?.repoName));
 
     if (hasMultipleRepos) {
@@ -540,9 +545,9 @@ export class ExportService {
             parts.push(`> Root: \`${firstRef.repositoryMetadata.rootPath}\`\n\n`);
           }
         }
-        
+
         for (const { snap } of files) {
-          parts.push(`### ${snap.relativePath}\n\n`);
+          parts.push(renderFileHeader(snap, '###'));
           if (snap.error) {
             parts.push(`> ⚠️ ${snap.error}\n\n`);
           } else {
@@ -557,7 +562,7 @@ export class ExportService {
     } else {
       // Render flat (no repo grouping)
       for (const snap of snapshots) {
-        parts.push(`## ${snap.relativePath}\n\n`);
+        parts.push(renderFileHeader(snap));
         if (snap.error) {
           parts.push(`> ⚠️ ${snap.error}\n\n`);
         } else {
@@ -587,6 +592,9 @@ export class ExportService {
     parts.push(await this.renderTreeSection(config));
 
     const successCount = snapshots.filter(s => !s.error).length;
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? 'unknown';
+    parts.push(buildDocumentHeader(successCount, totalSize, workspacePath));
+
     parts.push(`# Multi-File Copy\n`);
     parts.push(`Files: ${successCount} / ${snapshots.length}\n`);
     parts.push(`Size: ${(totalSize / 1024).toFixed(1)} KB\n`);
@@ -607,7 +615,7 @@ export class ExportService {
     parts.push('\n---\n\n');
 
     for (const snap of snapshots) {
-      parts.push(`## ${snap.relativePath}\n\n`);
+      parts.push(renderFileHeader(snap));
       if (snap.error) {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
@@ -635,6 +643,9 @@ export class ExportService {
     const parts: string[] = [];
 
     const successCount = snapshots.filter(s => !s.error).length;
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? 'unknown';
+    parts.push(buildDocumentHeader(successCount, totalSize, workspacePath));
+
     parts.push(`# Folder: ${folderName}\n`);
     parts.push(`Files: ${successCount} / ${snapshots.length}\n`);
     parts.push(`Size: ${(totalSize / 1024).toFixed(1)} KB\n`);
@@ -655,7 +666,7 @@ export class ExportService {
     parts.push('\n---\n\n');
 
     for (const snap of snapshots) {
-      parts.push(`## ${snap.relativePath}\n\n`);
+      parts.push(renderFileHeader(snap));
       if (snap.error) {
         parts.push(`> ⚠️ ${snap.error}\n\n`);
       } else {
@@ -680,7 +691,10 @@ export class ExportService {
       .map(s => {
         const lang = getLanguageTag(s.relativePath);
         const content = config?.addLineNumbers ? addLineNumbers(s.extractedContent) : s.extractedContent;
-        return `### ${s.relativePath}\n\`\`\`${lang}\n${content}\n\`\`\``;
+        const fullPath = vscode.Uri.parse(s.uri).fsPath;
+        const hash = computeContentHash(s.extractedContent);
+        const sizeLabel = s.sizeBytes !== undefined ? ` · ${(s.sizeBytes / 1024).toFixed(1)} KB` : '';
+        return `### ${s.relativePath}\n> \`${fullPath}\` · sha7: \`${hash}\`${sizeLabel}\n\`\`\`${lang}\n${content}\n\`\`\``;
       })
       .join('\n\n');
 
@@ -709,13 +723,16 @@ export class ExportService {
     if (!hasContextPlaceholder && contextText) {
       result = result + '\n\n' + contextText;
     }
-    
+
     // Always append error summary at the very end
     if (errorSummary) {
       result = result + errorSummary;
     }
 
-    return result;
+    const successCount = snapshots.filter(s => !s.error).length;
+    const totalSize = snapshots.reduce((sum, s) => sum + (s.sizeBytes ?? 0), 0);
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? 'unknown';
+    return buildDocumentHeader(successCount, totalSize, workspacePath) + result;
   }
 
   // ─── Directory walker ─────────────────────────────────────────────────────

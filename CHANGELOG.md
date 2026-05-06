@@ -1,8 +1,22 @@
 # Changelog
 
+## [0.2.6] — 2026-05-06
+
+### Added
+- **Comprehensive context mode documentation** — clear explanations that `skeleton` and other modes are extraction strategies, not empty files:
+  - Added table in ContextMode.ts showing what each mode includes/omits
+  - Created `CONTEXT_MODE_DESCRIPTIONS` constant for UI and AI agent reference
+  - Each mode now has: title, description, token reduction estimate, use case
+  - Added JSDoc in ContextExtractionService.extract() explaining all modes with token reduction percentages
+  - Modes explained: **full** (0%), **skeleton** (~70% reduction), **docstring** (~80%), **headers** (variable), **head-tail** (~50%), **smart** (auto)
+  - Language-specific notes: what markdown/Python/TypeScript skeleton mode extracts
+  
+**Why this matters:** When skeleton returns "headers + links", it's a targeted extraction, not an empty file. AI agents and users now understand the difference between "no content" and "structure-only content".
+
 ## [0.2.5] — 2026-05-06
 
 ### Fixed
+- **Markdown skeleton extraction returned empty** — fixed genericExtractMarkdownSkeleton() to extract headers, links, lists instead of looking for code patterns
 - **ConfigRepository not reading languageOverrides from settings** — the new `languageOverrides` field was added to CopyConfig but not included in ConfigRepository's keys array, preventing user settings from being read. Settings like `python: skeleton` were silently ignored.
 - **getEffectiveContextMode() was unnecessarily async** — caused ~50 unnecessary await calls per group copy operation, adding latency. Now synchronous (pure logic, no I/O).
 - **No validation on language override mode values** — users could set invalid modes in settings (e.g., `python: "invalid-mode"`) causing runtime failures. Now validates against allowed types.
