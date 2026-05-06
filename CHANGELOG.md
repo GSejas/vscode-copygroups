@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.5] — 2026-05-06
+
+### Fixed
+- **ConfigRepository not reading languageOverrides from settings** — the new `languageOverrides` field was added to CopyConfig but not included in ConfigRepository's keys array, preventing user settings from being read. Settings like `python: skeleton` were silently ignored.
+- **getEffectiveContextMode() was unnecessarily async** — caused ~50 unnecessary await calls per group copy operation, adding latency. Now synchronous (pure logic, no I/O).
+- **No validation on language override mode values** — users could set invalid modes in settings (e.g., `python: "invalid-mode"`) causing runtime failures. Now validates against allowed types.
+- **Comment contradicted precedence order** — documented "language > file" but code actually did "file > language". Comment now matches implementation.
+- **Dead code: Dockerfile mapping** — regex never matched `Dockerfile` (no extension), making this setting useless. Removed.
+
+### Added
+- **6 new unit tests** for language-aware context modes:
+  - Markdown files respect `skeleton` mode override
+  - Python files respect `skeleton` mode override
+  - Robot files respect `skeleton` mode override
+  - File-level overrides take precedence over language overrides
+  - Invalid language override modes safely fall back to group mode
+  - copyGroup() returns snapshots for building rich notifications
+
+### Changed
+- Test suite: 90 → 96 tests
+- ExportService: getEffectiveContextMode removed async/Promise wrapper
+
 ## [0.2.4] — 2026-05-06
 
 ### Added
