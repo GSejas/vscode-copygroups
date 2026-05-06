@@ -56,7 +56,7 @@ export class ConfigRepository extends BaseObservable<ConfigRepositoryChangeEvent
     const ws = vscode.workspace.getConfiguration('copygroups');
     const fromSettings: Partial<CopyConfig> = {};
     const keys: (keyof CopyConfig)[] = [
-      'defaultContextMode', 'maxFileCount', 'maxTotalSizeBytes', 'maxFileSizeBytes',
+      'defaultContextMode', 'languageOverrides', 'maxFileCount', 'maxTotalSizeBytes', 'maxFileSizeBytes',
       'maxDirectoryDepth', 'includePatterns', 'excludePatterns', 'skipBinaryFiles',
       'addLineNumbers', 'includeFileTree', 'fileTreeDepth', 'includeNeighborFiles',
       'neighborFileMode',

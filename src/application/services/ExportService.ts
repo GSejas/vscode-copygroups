@@ -66,7 +66,6 @@ export class ExportService {
       bash: 'shellscript',
       zsh: 'shellscript',
       ps1: 'powershell',
-      dockerfile: 'dockerfile',
     };
     
     return extToLangId[ext] || null;
@@ -74,14 +73,14 @@ export class ExportService {
 
   /**
    * Determines the effective context mode for a file
-   * Considers: language overrides > file overrides > default mode
+   * Considers: file override > language override > group mode (highest to lowest priority)
    */
-  private async getEffectiveContextMode(
+  private getEffectiveContextMode(
     config: CopyConfig,
     fileRef: { overrideContextMode?: ContextMode; relativePath: string },
     groupContextMode: ContextMode
-  ): Promise<ContextMode> {
-    // 1. Check for file-specific override
+  ): ContextMode {
+    // 1. Check for file-specific override (highest priority)
     if (fileRef.overrideContextMode) {
       return fileRef.overrideContextMode;
     }
@@ -89,11 +88,15 @@ export class ExportService {
     // 2. Check for language-specific override
     const languageId = this.getLanguageIdFromPath(fileRef.relativePath);
     if (languageId && config.languageOverrides[languageId]) {
-      const modeType = config.languageOverrides[languageId] as ContextModeType;
-      return { type: modeType };
+      const modeTypeStr = config.languageOverrides[languageId];
+      // Validate against allowed context modes to prevent runtime errors
+      const validModes: ContextModeType[] = ['full', 'docstring', 'headers', 'skeleton', 'head-tail', 'smart'];
+      if (validModes.includes(modeTypeStr as ContextModeType)) {
+        return { type: modeTypeStr as ContextModeType };
+      }
     }
 
-    // 3. Use group's context mode
+    // 3. Use group's context mode (lowest priority)
     return groupContextMode;
   }
 
@@ -445,7 +448,7 @@ export class ExportService {
     const snapshots: CopiedFileSnapshot[] = [];
 
     for (const fileRef of group.fileReferences) {
-      const effectiveMode = await this.getEffectiveContextMode(config, fileRef, group.contextMode);
+      const effectiveMode = this.getEffectiveContextMode(config, fileRef, group.contextMode);
       try {
         const exists = await this.fileProvider.fileExists(fileRef.uri);
         if (!exists) {

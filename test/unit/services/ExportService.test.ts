@@ -184,5 +184,117 @@ describe('ExportService', () => {
       const output = (env.clipboard.writeText as jest.Mock).mock.calls[0][0] as string;
       expect(output).toContain('File not found');
     });
+
+    it('applies language override: markdown uses skeleton mode', async () => {
+      const { exportService } = makeExportService(
+        { 'file:///README.md': '# Heading\n\nLong content...' },
+        { languageOverrides: { markdown: 'skeleton' } }
+      );
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///README.md', relativePath: 'README.md', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' },
+        tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      const result = await exportService.copyGroup(group);
+      expect(result.snapshots[0].contextMode.type).toBe('skeleton');
+    });
+
+    it('applies language override: python uses skeleton mode', async () => {
+      const { exportService } = makeExportService(
+        { 'file:///script.py': 'def main(): pass' },
+        { languageOverrides: { python: 'skeleton' } }
+      );
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///script.py', relativePath: 'script.py', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' },
+        tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      const result = await exportService.copyGroup(group);
+      expect(result.snapshots[0].contextMode.type).toBe('skeleton');
+    });
+
+    it('applies language override: robot uses skeleton mode', async () => {
+      const { exportService } = makeExportService(
+        { 'file:///test.robot': '*** Test Cases ***' },
+        { languageOverrides: { robot: 'skeleton' } }
+      );
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///test.robot', relativePath: 'test.robot', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' },
+        tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      const result = await exportService.copyGroup(group);
+      expect(result.snapshots[0].contextMode.type).toBe('skeleton');
+    });
+
+    it('file override takes precedence over language override', async () => {
+      const { exportService } = makeExportService(
+        { 'file:///script.py': 'def main(): pass' },
+        { languageOverrides: { python: 'skeleton' } }
+      );
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [
+          {
+            uri: 'file:///script.py',
+            relativePath: 'script.py',
+            contextMode: { type: 'full' },
+            overrideContextMode: { type: 'docstring' },
+          },
+        ],
+        contextMode: { type: 'full' },
+        tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      const result = await exportService.copyGroup(group);
+      expect(result.snapshots[0].contextMode.type).toBe('docstring');
+    });
+
+    it('ignores invalid language override modes (validates against allowed types)', async () => {
+      const { exportService } = makeExportService(
+        { 'file:///script.py': 'def main(): pass' },
+        { languageOverrides: { python: 'invalid-mode' as any } }
+      );
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///script.py', relativePath: 'script.py', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' },
+        tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      const result = await exportService.copyGroup(group);
+      // Should fall back to group's context mode since override is invalid
+      expect(result.snapshots[0].contextMode.type).toBe('full');
+    });
+
+    it('returns snapshots with output size for notification building', async () => {
+      const { exportService } = makeExportService({ 'file:///src/a.ts': 'const a = 1;' });
+      const group: any = {
+        id: 'g1', name: 'G', description: undefined,
+        fileReferences: [{ uri: 'file:///src/a.ts', relativePath: 'src/a.ts', contextMode: { type: 'full' } }],
+        contextMode: { type: 'full' },
+        tags: [], isBookmarked: false, preprompt: undefined,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      const result = await exportService.copyGroup(group);
+      expect(result.output).toEqual(expect.any(String));
+      expect(result.snapshots).toEqual(expect.any(Array));
+      expect(result.snapshots.length).toBeGreaterThan(0);
+      expect(result.snapshots[0]).toHaveProperty('uri');
+      expect(result.snapshots[0]).toHaveProperty('relativePath');
+      expect(result.snapshots[0]).toHaveProperty('contextMode');
+    });
   });
 });
