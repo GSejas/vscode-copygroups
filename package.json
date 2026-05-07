@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {
@@ -66,6 +66,11 @@
         "command": "copygroups.addToGroup",
         "title": "Copy Groups: Add File to Group",
         "icon": "$(file-add)"
+      },
+      {
+        "command": "copygroups.previewGroup",
+        "title": "Preview Group Contents",
+        "icon": "$(eye)"
       },
       {
         "command": "copygroups.copyGroup",
@@ -256,6 +261,11 @@
       ],
       "view/item/context": [
         {
+          "command": "copygroups.previewGroup",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "inline@0"
+        },
+        {
           "command": "copygroups.copyGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "inline@1"
@@ -304,6 +314,11 @@
           "command": "copygroups.setGroupPreprompt",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "2_edit@4"
+        },
+        {
+          "command": "copygroups.previewGroup",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "2_edit@5"
         },
         {
           "command": "copygroups.deleteGroup",

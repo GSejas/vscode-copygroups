@@ -37,8 +37,11 @@ export class GroupItem extends vscode.TreeItem {
     super(group.name, vscode.TreeItemCollapsibleState.Collapsed);
 
     const fileCount = group.fileReferences.length;
+    const modeStr = group.preprompt 
+      ? `${group.contextMode.type} · 📝 ${group.preprompt.name}`
+      : group.contextMode.type;
     const tagStr = group.tags.length > 0 ? ` · ${group.tags.map(t => t.name).join(', ')}` : '';
-    this.description = `${fileCount} file${fileCount !== 1 ? 's' : ''} · ${group.contextMode.type}${tagStr}`;
+    this.description = `${fileCount} file${fileCount !== 1 ? 's' : ''} · ${modeStr}${tagStr}`;
     this.tooltip = buildGroupTooltip(group);
 
     this.iconPath = group.isBookmarked

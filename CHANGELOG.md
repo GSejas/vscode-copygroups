@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.10] — 2026-05-06
+
+### Added
+- **Preview Group button** — new eye icon $(eye) on group items opens an editor tab with the markdown copy contents, letting you review the output before copying
+- **Preprompt indicator** — when a group has a selected preprompt, it now displays next to the context mode: e.g., "4 files · skeleton · 📝 Security Review"
+  - Shows in tree view description for quick visibility
+  - Preprompt name is also included in editor preview title
+
+### Changed
+- Group tree item descriptions enhanced to show preprompt name when selected
+- Preview button positioned as inline@0 (leftmost) for easy access alongside copy button
+
 ## [0.2.9] — 2026-05-06
 
 ### Fixed

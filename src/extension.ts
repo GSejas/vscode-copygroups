@@ -334,6 +334,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  // ── Command: preview group contents in editor ────────────────────────────
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.previewGroup', async (arg?: GroupItem | string) => {
+      let groupId: string | undefined;
+      if (arg instanceof GroupItem) {
+        groupId = arg.group.id;
+      } else if (typeof arg === 'string') {
+        groupId = arg;
+      }
+
+      if (!groupId) return;
+
+      const group = await groupService.getGroup(groupId);
+      if (!group) {
+        vscode.window.showErrorMessage('Group not found.');
+        return;
+      }
+
+      try {
+        const output = await exportService.buildGroupOutput(group, true);
+        const doc = await vscode.workspace.openTextDocument({
+          language: 'markdown',
+          content: output,
+        });
+        await vscode.window.showTextDocument(doc, { preview: false });
+      } catch (error) {
+        vscode.window.showErrorMessage(`Failed to preview group: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    })
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'copygroups.deleteGroup',
