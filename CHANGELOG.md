@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.7] — 2026-05-06
+
+### Added
+- **Copy metadata header** — every copied output now opens with a YAML frontmatter block containing `copied` timestamp, `workspace` path, `os` platform/version, and file count + size summary
+- **Per-file annotations** — each file section now shows the absolute path, a `sha7` content hash (for drift detection), and file size
+- **Manage Preprompts button** — `$(note)` icon added to the Groups panel title bar, next to Add and Refresh
+
+### Fixed
+- **Manage Preprompts double-selection bug** — selecting a preprompt then choosing Edit or Delete previously re-prompted for the preprompt selection. The action now operates directly on the already-selected preprompt
+- **Removed webview panel** — the experimental sidebar webview (`copygroups.sidebar`) has been removed; the tree-view panel is the authoritative UI
+
+### Changed
+- `createCustomPreprompt`, `editPreprompt`, and `deletePreprompt` are no longer separate commands; all preprompt management flows through `Manage Preprompts`
+
 ## [0.2.6] — 2026-05-06
 
 ### Added

@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {
@@ -116,20 +116,9 @@
         "title": "Copy Groups: Set Preprompt"
       },
       {
-        "command": "copygroups.createCustomPreprompt",
-        "title": "Copy Groups: Create Custom Preprompt"
-      },
-      {
-        "command": "copygroups.editPreprompt",
-        "title": "Copy Groups: Edit Preprompt"
-      },
-      {
-        "command": "copygroups.deletePreprompt",
-        "title": "Copy Groups: Delete Preprompt"
-      },
-      {
         "command": "copygroups.managePreprompts",
-        "title": "Copy Groups: Manage Preprompts"
+        "title": "Copy Groups: Manage Preprompts",
+        "icon": "$(note)"
       },
       {
         "command": "copygroups.removeFileFromGroup",
@@ -234,6 +223,11 @@
         },
         {
           "command": "copygroups.syncViews",
+          "when": "view == copygroups.groups",
+          "group": "navigation"
+        },
+        {
+          "command": "copygroups.managePreprompts",
           "when": "view == copygroups.groups",
           "group": "navigation"
         },

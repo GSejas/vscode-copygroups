@@ -549,161 +549,112 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ── Preprompt commands ───────────────────────────────────────────────────
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('copygroups.createCustomPreprompt', async () => {
-      const name = await vscode.window.showInputBox({
-        prompt: 'Preprompt name',
-        placeHolder: 'e.g. Code Review Template',
-        validateInput: v => v.trim() ? null : 'Name cannot be empty',
-      });
-      if (!name) return;
-
-      const template = await vscode.window.showInputBox({
-        prompt: 'Preprompt template (use {{context}}, {{groupName}}, {{fileCount}}, {{timestamp}}, {{mode}})',
-        placeHolder: 'Review this code: {{context}}',
-        validateInput: v => v.trim() ? null : 'Template cannot be empty',
-      });
-      if (!template) return;
-
-      const mode = await vscode.window.showQuickPick(
-        ['analysis', 'summary', 'review', 'custom'],
-        { placeHolder: 'Select preprompt mode' }
-      );
-      if (!mode) return;
-
-      try {
-        await prepromptService.create(name.trim(), template.trim(), mode);
-        vscode.window.showInformationMessage(`Custom preprompt "${name.trim()}" created.`);
-        
-        // Open the JSON file to show the new preprompt
-        const storagePath = prepromptRepo.getStoragePath();
-        const fileUri = vscode.Uri.file(storagePath);
-        await vscode.commands.executeCommand('vscode.open', fileUri);
-      } catch (err) {
-        vscode.window.showErrorMessage(`Failed to create preprompt: ${err}`);
-      }
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copygroups.editPreprompt', async () => {
-      const customPreprompts = prepromptService.getCustomPreprompts();
-      if (customPreprompts.length === 0) {
-        vscode.window.showInformationMessage('No custom preprompts to edit. Create one first.');
-        return;
-      }
-
-      const selected = await vscode.window.showQuickPick(
-        customPreprompts.map(p => ({ label: p.name, description: p.mode, prepromptId: p.id })),
-        { placeHolder: 'Select a preprompt to edit' }
-      );
-      if (!selected) return;
-
-      const preprompt = prepromptService.getById(selected.prepromptId);
-      if (!preprompt) return;
-
-      const newName = await vscode.window.showInputBox({
-        prompt: 'Preprompt name',
-        value: preprompt.name,
-        validateInput: v => v.trim() ? null : 'Name cannot be empty',
-      });
-      if (newName === undefined) return;
-
-      const newTemplate = await vscode.window.showInputBox({
-        prompt: 'Preprompt template',
-        value: preprompt.template,
-        validateInput: v => v.trim() ? null : 'Template cannot be empty',
-      });
-      if (newTemplate === undefined) return;
-
-      const newMode = await vscode.window.showQuickPick(
-        ['analysis', 'summary', 'review', 'custom'],
-        { placeHolder: `Current mode: ${preprompt.mode}` }
-      );
-      if (!newMode) return;
-
-      try {
-        await prepromptService.update(preprompt.id, newName.trim(), newTemplate.trim(), newMode);
-        vscode.window.showInformationMessage(`Preprompt "${newName.trim()}" updated.`);
-        
-        // Open the JSON file to show changes
-        const storagePath = prepromptRepo.getStoragePath();
-        const fileUri = vscode.Uri.file(storagePath);
-        await vscode.commands.executeCommand('vscode.open', fileUri);
-      } catch (err) {
-        vscode.window.showErrorMessage(`Failed to update preprompt: ${err}`);
-      }
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('copygroups.deletePreprompt', async () => {
-      const customPreprompts = prepromptService.getCustomPreprompts();
-      if (customPreprompts.length === 0) {
-        vscode.window.showInformationMessage('No custom preprompts to delete.');
-        return;
-      }
-
-      const selected = await vscode.window.showQuickPick(
-        customPreprompts.map(p => ({ label: p.name, description: p.mode, prepromptId: p.id })),
-        { placeHolder: 'Select a preprompt to delete' }
-      );
-      if (!selected) return;
-
-      const confirm = await vscode.window.showWarningMessage(
-        `Delete preprompt "${selected.label}"?`,
-        { modal: true },
-        'Delete'
-      );
-      if (confirm !== 'Delete') return;
-
-      try {
-        await prepromptService.delete(selected.prepromptId);
-        vscode.window.showInformationMessage(`Preprompt "${selected.label}" deleted.`);
-        
-        // Open the JSON file to show changes
-        const storagePath = prepromptRepo.getStoragePath();
-        const fileUri = vscode.Uri.file(storagePath);
-        await vscode.commands.executeCommand('vscode.open', fileUri);
-      } catch (err) {
-        vscode.window.showErrorMessage(`Failed to delete preprompt: ${err}`);
-      }
-    })
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand('copygroups.managePreprompts', async () => {
       const allPreprompts = prepromptService.getAllPreprompts();
-      if (allPreprompts.length === 0) {
-        vscode.window.showInformationMessage('No preprompts available.');
-        return;
-      }
 
       const selected = await vscode.window.showQuickPick(
         [
-          { label: '+ Create Custom', action: 'create' },
-          { label: '─'.repeat(20), action: 'separator' },
+          { label: '$(add) Create Custom', id: '__create__', isSystem: false },
           ...allPreprompts.map(p => ({
             label: p.name,
-            description: `${p.mode}${p.isSystem ? '' : ' (custom)'}`,
-            prepromptId: p.id,
-            action: p.isSystem ? 'view' : 'edit',
+            description: `${p.mode}${p.isSystem ? ' · built-in' : ' · custom'}`,
+            id: p.id,
+            isSystem: p.isSystem,
           })),
         ],
-        { placeHolder: 'Manage preprompts' }
+        { placeHolder: 'Select a preprompt to manage, or create a new one' }
       );
       if (!selected) return;
 
-      if (selected.action === 'create') {
-        await vscode.commands.executeCommand('copygroups.createCustomPreprompt');
-      } else if (selected.action === 'edit' && 'prepromptId' in selected) {
-        const action = await vscode.window.showQuickPick(
-          ['Edit', 'Delete'],
-          { placeHolder: `Options for "${selected.label}"` }
+      if (selected.id === '__create__') {
+        const name = await vscode.window.showInputBox({
+          prompt: 'Preprompt name',
+          placeHolder: 'e.g. Code Review Template',
+          validateInput: v => v.trim() ? null : 'Name cannot be empty',
+        });
+        if (!name) return;
+
+        const template = await vscode.window.showInputBox({
+          prompt: 'Template body — use {{context}}, {{groupName}}, {{fileCount}}, {{timestamp}}, {{mode}}',
+          placeHolder: 'Review this code:\n\n{{context}}',
+          validateInput: v => v.trim() ? null : 'Template cannot be empty',
+        });
+        if (!template) return;
+
+        const mode = await vscode.window.showQuickPick(
+          ['analysis', 'summary', 'review', 'custom'],
+          { placeHolder: 'Select a mode label' }
         );
-        if (action === 'Edit') {
-          await vscode.commands.executeCommand('copygroups.editPreprompt');
-        } else if (action === 'Delete') {
-          await vscode.commands.executeCommand('copygroups.deletePreprompt');
+        if (!mode) return;
+
+        try {
+          await prepromptService.create(name.trim(), template.trim(), mode);
+          vscode.window.showInformationMessage(`Preprompt "${name.trim()}" created.`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to create preprompt: ${err}`);
+        }
+        return;
+      }
+
+      if (selected.isSystem) {
+        vscode.window.showInformationMessage(`"${selected.label}" is a built-in preprompt and cannot be edited.`);
+        return;
+      }
+
+      // Custom preprompt selected — offer edit or delete without re-selecting
+      const preprompt = prepromptService.getById(selected.id);
+      if (!preprompt) return;
+
+      const action = await vscode.window.showQuickPick(
+        [
+          { label: '$(edit) Edit', action: 'edit' },
+          { label: '$(trash) Delete', action: 'delete' },
+        ],
+        { placeHolder: `"${preprompt.name}" — choose an action` }
+      );
+      if (!action) return;
+
+      if (action.action === 'edit') {
+        const newName = await vscode.window.showInputBox({
+          prompt: 'Preprompt name',
+          value: preprompt.name,
+          validateInput: v => v.trim() ? null : 'Name cannot be empty',
+        });
+        if (newName === undefined) return;
+
+        const newTemplate = await vscode.window.showInputBox({
+          prompt: 'Template body',
+          value: preprompt.template,
+          validateInput: v => v.trim() ? null : 'Template cannot be empty',
+        });
+        if (newTemplate === undefined) return;
+
+        const newMode = await vscode.window.showQuickPick(
+          ['analysis', 'summary', 'review', 'custom'],
+          { placeHolder: `Current: ${preprompt.mode}` }
+        );
+        if (!newMode) return;
+
+        try {
+          await prepromptService.update(preprompt.id, newName.trim(), newTemplate.trim(), newMode);
+          vscode.window.showInformationMessage(`Preprompt "${newName.trim()}" updated.`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to update preprompt: ${err}`);
+        }
+
+      } else if (action.action === 'delete') {
+        const confirm = await vscode.window.showWarningMessage(
+          `Delete preprompt "${preprompt.name}"?`,
+          { modal: true },
+          'Delete'
+        );
+        if (confirm !== 'Delete') return;
+
+        try {
+          await prepromptService.delete(preprompt.id);
+          vscode.window.showInformationMessage(`Preprompt "${preprompt.name}" deleted.`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed to delete preprompt: ${err}`);
         }
       }
     })
