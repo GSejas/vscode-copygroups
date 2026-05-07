@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.11] — 2026-05-07
+
+### Fixed
+- **FileItem now shows the actual extraction mode, not "default"** — files without an override now display the group's mode (e.g. `full`) instead of the opaque `default` label
+- **Language override visibility** — when a language config rule silently overrides the group mode (e.g. a Python file in a "full" group gets `skeleton` due to the default `python: skeleton` config), the file now shows `skeleton (lang)` with a tooltip explaining why and how to override it
+- Group tooltip per-file list now shows the resolved mode and its source (file override / language override / group)
+
 ## [0.2.10] — 2026-05-06
 
 ### Added

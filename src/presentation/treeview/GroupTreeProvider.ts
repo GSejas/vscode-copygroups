@@ -13,7 +13,10 @@
 import * as vscode from 'vscode';
 import { Group } from '../../domain/entities/Group';
 import { FileReference } from '../../domain/valueObjects/FileReference';
+import { ContextMode } from '../../domain/valueObjects/ContextMode';
+import { CopyConfig } from '../../domain/valueObjects/CopyConfig';
 import { GroupService } from '../../application/services/GroupService';
+import { ConfigRepository } from '../../infrastructure/repositories/ConfigRepository';
 
 type GroupTreeNode = SectionItem | GroupItem | FileItem;
 
@@ -61,12 +64,17 @@ export class FileItem extends vscode.TreeItem {
   constructor(
     public readonly groupId: string,
     public readonly file: FileReference,
-    public readonly fileIndex: number
+    public readonly fileIndex: number,
+    effectiveMode: string,
+    modeSource: 'file' | 'language' | 'group'
   ) {
-    const currentMode = file.overrideContextMode?.type || 'default';
     super(file.relativePath, vscode.TreeItemCollapsibleState.None);
 
-    this.description = `· ${currentMode}`;
+    const modeLabel = modeSource === 'language' ? `${effectiveMode} (lang)` : effectiveMode;
+    this.description = `· ${modeLabel}`;
+    this.tooltip = modeSource === 'language'
+      ? `Extracting as ${effectiveMode} — language config override is active (set a file override to change)`
+      : `Extracting as ${effectiveMode}`;
     this.iconPath = new vscode.ThemeIcon('file');
     this.contextValue = 'groupFileItem';
 
@@ -78,14 +86,14 @@ export class FileItem extends vscode.TreeItem {
   }
 }
 
-function buildGroupTooltip(group: Group): vscode.MarkdownString {
+function buildGroupTooltip(group: Group, config?: CopyConfig): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   md.appendMarkdown(`**${group.name}**\n\n`);
   if (group.description) {
     md.appendMarkdown(`${group.description}\n\n`);
   }
-  md.appendMarkdown(`Context mode: \`${group.contextMode.type}\` (default)\n\n`);
+  md.appendMarkdown(`Context mode: \`${group.contextMode.type}\`\n\n`);
   if (group.tags.length > 0) {
     md.appendMarkdown(`Tags: ${group.tags.map(t => `\`${t.name}\``).join(' ')}\n\n`);
   }
@@ -94,11 +102,46 @@ function buildGroupTooltip(group: Group): vscode.MarkdownString {
   }
   md.appendMarkdown(`**Files (${group.fileReferences.length}):**\n\n`);
   for (const f of group.fileReferences) {
-    const fileMode = f.overrideContextMode?.type || 'default';
-    md.appendMarkdown(`• \`${f.relativePath}\` [${fileMode}]\n\n`);
+    if (f.overrideContextMode) {
+      md.appendMarkdown(`• \`${f.relativePath}\` \`${f.overrideContextMode.type}\` _(file override)_\n\n`);
+    } else if (config) {
+      const { mode, source } = resolveEffectiveMode(f, group.contextMode, config);
+      const note = source === 'language' ? ' _(language override)_' : '';
+      md.appendMarkdown(`• \`${f.relativePath}\` \`${mode}\`${note}\n\n`);
+    } else {
+      md.appendMarkdown(`• \`${f.relativePath}\` \`${group.contextMode.type}\`\n\n`);
+    }
   }
   md.appendMarkdown(`\n_Last updated: ${group.updatedAt.toLocaleString()}_`);
   return md;
+}
+
+// Maps common extensions to VS Code language IDs (mirrors ExportService)
+const EXT_TO_LANG_ID: Record<string, string> = {
+  md: 'markdown', markdown: 'markdown',
+  py: 'python', robot: 'robot', resource: 'robot',
+  ts: 'typescript', tsx: 'typescriptreact',
+  js: 'javascript', jsx: 'javascriptreact',
+  json: 'json', yaml: 'yaml', yml: 'yaml',
+  toml: 'toml', sh: 'shellscript', ps1: 'powershell',
+};
+
+function resolveEffectiveMode(
+  file: FileReference,
+  groupMode: ContextMode,
+  config: CopyConfig
+): { mode: string; source: 'file' | 'language' | 'group' } {
+  if (file.overrideContextMode) {
+    return { mode: file.overrideContextMode.type, source: 'file' };
+  }
+  const ext = file.relativePath.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase();
+  if (ext) {
+    const langId = EXT_TO_LANG_ID[ext];
+    if (langId && config.languageOverrides[langId]) {
+      return { mode: config.languageOverrides[langId], source: 'language' };
+    }
+  }
+  return { mode: groupMode.type, source: 'group' };
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -107,7 +150,10 @@ export class GroupTreeProvider implements vscode.TreeDataProvider<GroupTreeNode>
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<GroupTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private groupService: GroupService) {}
+  constructor(
+    private groupService: GroupService,
+    private configRepo: ConfigRepository
+  ) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire(undefined);
@@ -148,9 +194,13 @@ export class GroupTreeProvider implements vscode.TreeDataProvider<GroupTreeNode>
       }
     }
 
-    // Expand group to show files
+    // Expand group to show files with their effective context modes
     if (element instanceof GroupItem) {
-      return element.group.fileReferences.map((file, index) => new FileItem(element.group.id, file, index));
+      const config = await this.configRepo.get();
+      return element.group.fileReferences.map((file, index) => {
+        const { mode, source } = resolveEffectiveMode(file, element.group.contextMode, config);
+        return new FileItem(element.group.id, file, index, mode, source);
+      });
     }
 
     return [];

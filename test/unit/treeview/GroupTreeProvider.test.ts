@@ -1,4 +1,4 @@
-import { GroupItem } from '../../../src/presentation/treeview/GroupTreeProvider';
+import { GroupItem, FileItem } from '../../../src/presentation/treeview/GroupTreeProvider';
 import { Group } from '../../../src/domain/entities/Group';
 import { ContextMode } from '../../../src/domain/valueObjects/ContextMode';
 import { FileReference } from '../../../src/domain/valueObjects/FileReference';
@@ -32,6 +32,16 @@ function makePreprompt(name: string): Preprompt {
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
   };
+}
+
+function makeFileItem(
+  relativePath: string,
+  effectiveMode: string,
+  source: 'file' | 'language' | 'group',
+  overrideContextMode?: ContextMode
+): FileItem {
+  const file: FileReference = { uri: `file:///${relativePath}`, relativePath, overrideContextMode };
+  return new FileItem('g1', file, 0, effectiveMode, source);
 }
 
 // ─── GroupItem description ────────────────────────────────────────────────────
@@ -114,5 +124,47 @@ describe('GroupItem tree properties', () => {
     const item = new GroupItem(makeGroup());
     expect(item.command?.command).toBe('copygroups.copyGroup');
     expect(item.command?.arguments).toEqual(['g1']);
+  });
+});
+
+// ─── FileItem effective mode display ─────────────────────────────────────────
+
+describe('FileItem description', () => {
+  it('shows group mode when source is group', () => {
+    const item = makeFileItem('src/app.ts', 'full', 'group');
+    expect(item.description).toBe('· full');
+  });
+
+  it('shows file override mode when source is file', () => {
+    const item = makeFileItem('src/app.ts', 'skeleton', 'file', { type: 'skeleton' });
+    expect(item.description).toBe('· skeleton');
+  });
+
+  it('appends (lang) suffix when source is language override', () => {
+    const item = makeFileItem('src/script.py', 'skeleton', 'language');
+    expect(item.description).toBe('· skeleton (lang)');
+  });
+
+  it('does not append (lang) when source is group even if mode is skeleton', () => {
+    const item = makeFileItem('src/app.ts', 'skeleton', 'group');
+    expect(item.description).toBe('· skeleton');
+    expect(item.description).not.toContain('(lang)');
+  });
+});
+
+describe('FileItem tooltip', () => {
+  it('warns about language override in tooltip', () => {
+    const item = makeFileItem('script.py', 'skeleton', 'language');
+    expect(item.tooltip).toContain('language config override');
+  });
+
+  it('does not warn when mode comes from group', () => {
+    const item = makeFileItem('app.ts', 'full', 'group');
+    expect(item.tooltip).not.toContain('language config override');
+  });
+
+  it('tooltip includes the effective mode name', () => {
+    const item = makeFileItem('app.ts', 'full', 'group');
+    expect(item.tooltip).toContain('full');
   });
 });

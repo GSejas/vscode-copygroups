@@ -75,7 +75,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const prepromptService = new PrepromptService(prepromptRepo);
 
   // ── Presentation ──────────────────────────────────────────────────────────
-  const groupProvider = new GroupTreeProvider(groupService);
+  const groupProvider = new GroupTreeProvider(groupService, configRepo);
   const historyProvider = new HistoryTreeProvider(historyService);
 
   const groupsView = vscode.window.createTreeView('copygroups.groups', {
