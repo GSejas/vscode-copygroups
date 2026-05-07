@@ -53,12 +53,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const fileProvider = new VSCodeFileProvider();
 
   // Enable global state syncing across VS Code instances and machines
-  context.globalState.setKeysForSync(['copygroups.groups', 'copygroups.history', 'copygroups.config']);
+  context.globalState.setKeysForSync(['copygroups.history', 'copygroups.config']);
 
-  const groupRepo = new GroupRepository(context.globalState);
+  const groupRepo = new GroupRepository();
   await groupRepo.initialize();
 
-  const historyRepo = new CopyHistoryRepository(context.globalState);
+  const historyRepo = new CopyHistoryRepository();
   await historyRepo.initialize();
 
   const configRepo = new ConfigRepository(context.globalState);
@@ -951,7 +951,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // ── Multi-window state syncing ────────────────────────────────────────────
 
   // Set up file watcher for GroupRepository changes from other instances
-  groupRepo.setupFileWatcher(context.extensionPath);
+  groupRepo.setupFileWatcher();
 
   // Subscribe to repository changes and refresh tree views
   const groupObserver = {

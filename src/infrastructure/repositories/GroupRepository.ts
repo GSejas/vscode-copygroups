@@ -1,13 +1,14 @@
 /**
  * GroupRepository
- * Handles persistence of groups to workspace storage
- * Supports multi-window state syncing via observer pattern
+ * Handles persistence of groups to local file storage
+ * Supports multi-window state syncing via file system watcher
  */
 
 import * as vscode from 'vscode';
 import { Group, GroupEntity } from '../../domain/entities/Group';
 import { IGroupRepository } from '../../domain/interfaces/IGroupRepository';
 import { BaseObservable, IStateObserver } from '../patterns/Observer';
+import { LocalFileStorage } from '../storage/LocalFileStorage';
 
 export interface GroupRepositoryChangeEvent {
   type: 'add' | 'update' | 'delete' | 'refresh';
@@ -17,12 +18,13 @@ export interface GroupRepositoryChangeEvent {
 
 export class GroupRepository extends BaseObservable<GroupRepositoryChangeEvent> implements IGroupRepository {
   private groups: Map<string, Group> = new Map();
-  private readonly storageKey = 'copygroups.groups';
+  private readonly storage: LocalFileStorage;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private lastModified: number = 0;
 
-  constructor(private globalState: vscode.Memento) {
+  constructor() {
     super();
+    this.storage = new LocalFileStorage('copygroups-groups.json');
   }
 
   async initialize(): Promise<void> {
@@ -36,26 +38,28 @@ export class GroupRepository extends BaseObservable<GroupRepositoryChangeEvent> 
 
   /**
    * Set up file watcher for multi-window state sync
+   * Watches ~/.vscode-copygroups/copygroups-groups.json for changes from other instances
    */
-  setupFileWatcher(extensionPath: string): void {
+  setupFileWatcher(): void {
     try {
+      const storagePath = this.storage.getStoragePath();
       const watchPattern = new vscode.RelativePattern(
-        vscode.Uri.file(extensionPath),
+        vscode.Uri.file(storagePath).fsPath.split(/[\\/]/).slice(0, -1).join('/'),
         'copygroups-groups.json'
       );
       this.fileWatcher = vscode.workspace.createFileSystemWatcher(watchPattern);
 
       this.fileWatcher.onDidChange(async () => {
-        console.log('[GroupRepository] Detected external file change, refreshing...');
+        console.log('[GroupRepository] Detected external file change from other window, refreshing...');
         await this.refresh();
       });
 
       this.fileWatcher.onDidCreate(async () => {
-        console.log('[GroupRepository] File created, refreshing...');
+        console.log('[GroupRepository] Groups file created (first time?), refreshing...');
         await this.refresh();
       });
 
-      console.log('[GroupRepository] File watcher enabled');
+      console.log(`[GroupRepository] File watcher enabled for ${storagePath}`);
     } catch (err) {
       console.warn('[GroupRepository] Failed to setup file watcher:', err);
     }
@@ -161,11 +165,11 @@ export class GroupRepository extends BaseObservable<GroupRepositoryChangeEvent> 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   /**
-   * Load groups from globalState storage
+   * Load groups from local file storage (shared across all instances)
    */
   private async loadFromStorage(): Promise<void> {
     try {
-      const stored = this.globalState.get<any>(this.storageKey);
+      const stored = this.storage.get<any[]>('groups', []);
       this.groups.clear();
 
       if (stored && Array.isArray(stored)) {
@@ -195,10 +199,17 @@ export class GroupRepository extends BaseObservable<GroupRepositoryChangeEvent> 
         updatedAt: group.updatedAt.toISOString(),
       }));
 
-      await this.globalState.update(this.storageKey, data);
+      this.storage.update('groups', data);
     } catch (error) {
-      console.error('Failed to persist groups to storage:', error);
+      console.error('[GroupRepository] Failed to persist groups to storage:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get storage path for debugging
+   */
+  getStoragePath(): string {
+    return this.storage.getStoragePath();
   }
 }

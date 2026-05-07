@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.13] — 2026-05-07
+
+### Fixed
+- **Language overrides no longer ship with opinionated defaults** — `copygroups.context.languageOverrides` now defaults to `{}`. Previously, markdown, python, robot, and robotfile were all defaulting to `skeleton` mode, silently overriding the group's mode and producing empty output for robot files (whose syntax the generic skeleton extractor doesn't understand). The group mode is now authoritative by default. Language overrides remain available as an opt-in power-user setting.
+
 ## [0.2.11] — 2026-05-07
 
 ### Fixed

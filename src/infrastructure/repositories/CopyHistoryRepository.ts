@@ -1,24 +1,27 @@
 /**
  * CopyHistoryRepository
- * Persists copy history entries in VS Code workspace state
+ * Persists copy history entries to local file storage (shared across windows)
  */
 
-import * as vscode from 'vscode';
 import { CopyHistoryEntry } from '../../domain/entities/CopyHistoryEntry';
 import { ICopyHistoryRepository } from '../../domain/interfaces/ICopyHistoryRepository';
+import { LocalFileStorage } from '../storage/LocalFileStorage';
 
-const STORAGE_KEY = 'copygroups.history';
+const STORAGE_KEY = 'history';
 /** Keep at most this many entries before pruning oldest non-favourites */
 const MAX_ENTRIES = 200;
 
 export class CopyHistoryRepository implements ICopyHistoryRepository {
   private entries: Map<string, CopyHistoryEntry> = new Map();
+  private readonly storage: LocalFileStorage;
 
-  constructor(private globalState: vscode.Memento) {}
+  constructor() {
+    this.storage = new LocalFileStorage('copygroups-history.json');
+  }
 
   async initialize(): Promise<void> {
     try {
-      const stored = this.globalState.get<any[]>(STORAGE_KEY, []);
+      const stored = this.storage.get<any[]>(STORAGE_KEY, []) || [];
       for (const raw of stored) {
         const entry: CopyHistoryEntry = {
           ...raw,
@@ -27,7 +30,7 @@ export class CopyHistoryRepository implements ICopyHistoryRepository {
         this.entries.set(entry.id, entry);
       }
     } catch (error) {
-      console.error('Failed to load copy history:', error);
+      console.error('[CopyHistoryRepository] Failed to load history:', error);
     }
   }
 
@@ -101,6 +104,6 @@ export class CopyHistoryRepository implements ICopyHistoryRepository {
       ...e,
       copiedAt: e.copiedAt.toISOString(),
     }));
-    await this.globalState.update(STORAGE_KEY, data);
+    this.storage.update(STORAGE_KEY, data);
   }
 }
