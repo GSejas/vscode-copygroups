@@ -555,6 +555,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const selected = await vscode.window.showQuickPick(
         [
           { label: '$(add) Create Custom', id: '__create__', isSystem: false },
+          { label: '$(folder-opened) Open JSON file', id: '__open__', isSystem: false },
           ...allPreprompts.map(p => ({
             label: p.name,
             description: `${p.mode}${p.isSystem ? ' · built-in' : ' · custom'}`,
@@ -565,6 +566,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { placeHolder: 'Select a preprompt to manage, or create a new one' }
       );
       if (!selected) return;
+
+      if (selected.id === '__open__') {
+        const storagePath = prepromptRepo.getStoragePath();
+        const fileUri = vscode.Uri.file(storagePath);
+        try {
+          await vscode.workspace.fs.stat(fileUri);
+        } catch {
+          const empty = new TextEncoder().encode(JSON.stringify({ customPreprompts: {} }, null, 2));
+          await vscode.workspace.fs.writeFile(fileUri, empty);
+        }
+        await vscode.commands.executeCommand('vscode.open', fileUri);
+        return;
+      }
 
       if (selected.id === '__create__') {
         const name = await vscode.window.showInputBox({

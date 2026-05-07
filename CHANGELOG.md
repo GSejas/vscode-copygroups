@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.8] — 2026-05-06
+
+### Added
+- **Open JSON file** option in Manage Preprompts quickpick — opens the custom preprompts storage file directly in the editor for manual editing
+
 ## [0.2.7] — 2026-05-06
 
 ### Added
