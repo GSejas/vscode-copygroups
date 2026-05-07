@@ -183,55 +183,60 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'copygroups.addToGroup',
-      async (contextUri?: vscode.Uri) => {
-        // Resolve the file/folder URI — could come from explorer context or be absent
-        let resourceUri: vscode.Uri | undefined = contextUri;
-        if (!resourceUri) {
-          const editor = vscode.window.activeTextEditor;
-          if (editor) {
-            resourceUri = editor.document.uri;
-          }
-        }
-        if (!resourceUri) {
+      async (contextUri?: vscode.Uri, allSelectedUris?: vscode.Uri[]) => {
+        // VS Code passes (clickedUri, allSelectedUris[]) for multi-selection context menu invocations.
+        // Fall back to active editor when triggered from the command palette.
+        const urisToProcess: vscode.Uri[] = allSelectedUris && allSelectedUris.length > 0
+          ? allSelectedUris
+          : contextUri
+            ? [contextUri]
+            : vscode.window.activeTextEditor
+              ? [vscode.window.activeTextEditor.document.uri]
+              : [];
+
+        if (urisToProcess.length === 0) {
           vscode.window.showErrorMessage('No file or folder selected. Open a file or right-click one in the explorer.');
           return;
         }
 
-        // Check if it's a folder
-        const stat = await vscode.workspace.fs.stat(resourceUri);
-        const isFolder = (stat.type & vscode.FileType.Directory) !== 0;
+        const config = await configRepo.get();
 
-        // If it's a folder, expand it to get all files
-        let fileUris: string[] = [];
-        if (isFolder) {
-          const config = await configRepo.get();
-          await (async function walkDir(dirUri: vscode.Uri, depth: number): Promise<void> {
-            if (depth > config.maxDirectoryDepth) return;
-            try {
-              const entries = await vscode.workspace.fs.readDirectory(dirUri);
-              for (const [name, type] of entries) {
-                if (name.startsWith('.')) continue;
-                const childUri = vscode.Uri.joinPath(dirUri, name);
-                if ((type & vscode.FileType.Directory) !== 0) {
-                  await walkDir(childUri, depth + 1);
-                } else {
-                  const relativePath = await fileProvider.getRelativePath(childUri.toString());
-                  const matcher = new PatternMatcher(config.includePatterns, config.excludePatterns);
-                  if (matcher.shouldInclude(relativePath)) {
-                    fileUris.push(childUri.toString());
+        // Expand each URI — files are added directly, folders are walked
+        const fileUris: string[] = [];
+        let expandedFolders = 0;
+        for (const resourceUri of urisToProcess) {
+          const stat = await vscode.workspace.fs.stat(resourceUri);
+          const isFolder = (stat.type & vscode.FileType.Directory) !== 0;
+          if (isFolder) {
+            expandedFolders++;
+            await (async function walkDir(dirUri: vscode.Uri, depth: number): Promise<void> {
+              if (depth > config.maxDirectoryDepth) return;
+              try {
+                const entries = await vscode.workspace.fs.readDirectory(dirUri);
+                for (const [name, type] of entries) {
+                  if (name.startsWith('.')) continue;
+                  const childUri = vscode.Uri.joinPath(dirUri, name);
+                  if ((type & vscode.FileType.Directory) !== 0) {
+                    await walkDir(childUri, depth + 1);
+                  } else {
+                    const relativePath = await fileProvider.getRelativePath(childUri.toString());
+                    const matcher = new PatternMatcher(config.includePatterns, config.excludePatterns);
+                    if (matcher.shouldInclude(relativePath)) {
+                      fileUris.push(childUri.toString());
+                    }
                   }
                 }
+              } catch {
+                // Folder read failed, skip
               }
-            } catch {
-              // Folder read failed, skip
-            }
-          })(resourceUri, 0);
-        } else {
-          fileUris = [resourceUri.toString()];
+            })(resourceUri, 0);
+          } else {
+            fileUris.push(resourceUri.toString());
+          }
         }
 
         if (fileUris.length === 0) {
-          vscode.window.showErrorMessage('No files found' + (isFolder ? ' in folder' : '') + '.');
+          vscode.window.showErrorMessage('No files found in selection.');
           return;
         }
 
@@ -275,9 +280,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
 
         groupProvider.refresh();
-        const message = isFolder 
-          ? `Added ${addedCount} file(s) to "${chosen.label}".`
-          : `Added to "${chosen.label}".`;
+        const message = addedCount === 1
+          ? `Added 1 file to "${chosen.label}".`
+          : `Added ${addedCount} files to "${chosen.label}".`;
         vscode.window.showInformationMessage(message);
       }
     )

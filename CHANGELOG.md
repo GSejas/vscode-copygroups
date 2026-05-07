@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.9] — 2026-05-06
+
+### Fixed
+- **Multi-file selection add to group** — selecting multiple files in the explorer and right-clicking "Add to Group" now adds all selected files. Previously only the right-clicked file was added because the second `allSelectedUris` argument VS Code passes for multi-selection was ignored
+
 ## [0.2.8] — 2026-05-06
 
 ### Added
