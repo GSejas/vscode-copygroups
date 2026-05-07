@@ -17,8 +17,6 @@ import { GroupService } from '../../application/services/GroupService';
 
 type GroupTreeNode = SectionItem | GroupItem | FileItem;
 
-const MODES = ['full', 'skeleton', 'docstring', 'headers', 'head-tail', 'smart'] as const;
-
 // ─── Tree Items ───────────────────────────────────────────────────────────────
 
 class SectionItem extends vscode.TreeItem {

@@ -203,12 +203,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         // Expand each URI — files are added directly, folders are walked
         const fileUris: string[] = [];
-        let expandedFolders = 0;
         for (const resourceUri of urisToProcess) {
           const stat = await vscode.workspace.fs.stat(resourceUri);
           const isFolder = (stat.type & vscode.FileType.Directory) !== 0;
           if (isFolder) {
-            expandedFolders++;
             await (async function walkDir(dirUri: vscode.Uri, depth: number): Promise<void> {
               if (depth > config.maxDirectoryDepth) return;
               try {
@@ -334,6 +332,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  // ── Group preview virtual document provider ──────────────────────────────
+  // Uses a stable URI per group so re-previewing the same group reuses the tab.
+  // URI scheme: copygroups-preview://<groupId>/<SafeGroupName>.md
+  const previewContents = new Map<string, string>();
+  const previewChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
+  const previewProvider: vscode.TextDocumentContentProvider = {
+    onDidChange: previewChangeEmitter.event,
+    provideTextDocumentContent(uri: vscode.Uri): string {
+      return previewContents.get(uri.authority) ?? '';
+    },
+  };
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider('copygroups-preview', previewProvider)
+  );
+
   // ── Command: preview group contents in editor ────────────────────────────
   context.subscriptions.push(
     vscode.commands.registerCommand('copygroups.previewGroup', async (arg?: GroupItem | string) => {
@@ -344,7 +357,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         groupId = arg;
       }
 
-      if (!groupId) return;
+      // Command palette fallback: let user pick a group
+      if (!groupId) {
+        const groups = await groupService.getAllGroups();
+        if (groups.length === 0) {
+          vscode.window.showInformationMessage('No groups yet.');
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          groups.map(g => ({ label: g.name, description: `${g.fileReferences.length} files`, id: g.id })),
+          { placeHolder: 'Select a group to preview' }
+        );
+        if (!pick) return;
+        groupId = pick.id;
+      }
 
       const group = await groupService.getGroup(groupId);
       if (!group) {
@@ -354,11 +380,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
       try {
         const output = await exportService.buildGroupOutput(group, true);
-        const doc = await vscode.workspace.openTextDocument({
-          language: 'markdown',
-          content: output,
-        });
-        await vscode.window.showTextDocument(doc, { preview: false });
+        const safeName = group.name.replace(/[^\w\s-]/g, '_');
+        const titleSuffix = group.preprompt ? ` · ${group.preprompt.name}` : '';
+        const uri = vscode.Uri.parse(
+          `copygroups-preview://${encodeURIComponent(group.id)}/${encodeURIComponent(safeName + titleSuffix)}.md`
+        );
+        previewContents.set(encodeURIComponent(group.id), output);
+        previewChangeEmitter.fire(uri);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc, { preview: true });
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to preview group: ${error instanceof Error ? error.message : String(error)}`);
       }

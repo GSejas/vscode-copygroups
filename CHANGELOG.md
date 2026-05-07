@@ -3,14 +3,15 @@
 ## [0.2.10] — 2026-05-06
 
 ### Added
-- **Preview Group button** — new eye icon $(eye) on group items opens an editor tab with the markdown copy contents, letting you review the output before copying
-- **Preprompt indicator** — when a group has a selected preprompt, it now displays next to the context mode: e.g., "4 files · skeleton · 📝 Security Review"
-  - Shows in tree view description for quick visibility
-  - Preprompt name is also included in editor preview title
+- **Preview Group button** — `$(eye)` icon on each group item opens a named, read-only editor tab showing the exact markdown that would be copied. Re-clicking the button refreshes the same tab rather than opening a new one
+- **Command palette preview** — `Preview Group Contents` prompts for a group when invoked without context
+- **Preprompt indicator** — groups with an attached preprompt show `📝 <name>` next to the context mode in the tree description, e.g. `4 files · skeleton · 📝 Security Review`
 
-### Changed
-- Group tree item descriptions enhanced to show preprompt name when selected
-- Preview button positioned as inline@0 (leftmost) for easy access alongside copy button
+### Fixed
+- Preview tab now has a proper filename derived from the group name (and preprompt if set), not "Untitled-N"
+- Preview re-uses the same tab per group via a virtual document provider; no more tab accumulation
+- `expandedFolders` unused variable compile error from v0.2.9
+- Removed dead `MODES` constant from GroupTreeProvider
 
 ## [0.2.9] — 2026-05-06
 
