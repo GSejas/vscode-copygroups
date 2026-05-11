@@ -122,6 +122,21 @@ describe('GroupService', () => {
       const updated = await svc.getGroup(g.id);
       expect(updated!.contextMode.type).toBe('skeleton');
     });
+
+    it('clears all file-level overrides when group mode is set', async () => {
+      const svc = new GroupService(makeMockRepo());
+      const g = await svc.createGroup('Test');
+      await svc.addFileToGroup(g.id, 'file:///a.ts', 'a.ts');
+      await svc.addFileToGroup(g.id, 'file:///b.ts', 'b.ts');
+      // Set per-file overrides
+      await svc.setFileMode(g.id, 0, { type: 'skeleton' });
+      await svc.setFileMode(g.id, 1, { type: 'docstring' });
+      // Now set the group mode — overrides should be wiped
+      await svc.setContextMode(g.id, { type: 'full' });
+      const updated = await svc.getGroup(g.id);
+      expect(updated!.fileReferences[0].overrideContextMode).toBeUndefined();
+      expect(updated!.fileReferences[1].overrideContextMode).toBeUndefined();
+    });
   });
 
   describe('setPreprompt', () => {

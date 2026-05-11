@@ -479,7 +479,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
         await groupService.setContextMode(groupId, { type: selected.label as ContextModeType });
         groupProvider.refresh();
-        vscode.window.showInformationMessage(`Context mode set to "${selected.label}".`);
+        vscode.window.showInformationMessage(`Context mode set to "${selected.label}" — all file overrides cleared.`);
       }
     )
   );

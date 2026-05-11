@@ -127,6 +127,9 @@ export class GroupService {
 
     group.contextMode = mode;
     group.updatedAt = new Date();
+    for (const ref of group.fileReferences) {
+      delete ref.overrideContextMode;
+    }
 
     await this.repository.save(group);
     return group;

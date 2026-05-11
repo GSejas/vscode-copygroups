@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.14] — 2026-05-07
+
+### Fixed
+- **Setting group mode now clears all file-level overrides** — previously, files with a per-file override would ignore a group mode change, silently staying on their old mode. Now, setting the group mode is a group-wide reset: all file overrides are cleared so every file uses the new mode. Files can still be individually overridden afterwards.
+
 ## [0.2.13] — 2026-05-07
 
 ### Fixed
