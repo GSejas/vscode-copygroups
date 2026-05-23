@@ -10,8 +10,9 @@
 Create reusable collections of related files. Bookmark the ones you use most.
 
 - **Create group** — `Ctrl+Shift+G` or the `+` button in the sidebar
-- **Add files** — right-click any file in the explorer → *Add File to Group*, or use `Ctrl+Shift+A`
+- **Add files** — right-click any file in the explorer → *Add File to Group*, use `Ctrl+Shift+A`, or click the file-add icon in the editor toolbar while the file is open
 - **Copy group** — click the group name or press `Ctrl+Shift+C`; formatted markdown lands on your clipboard
+- **Append group** — click the `+` inline button on any group to append its content to whatever is already on the clipboard, separated by `---`. Build up multi-group context without overwriting.
 
 ### Context Modes
 Control what gets copied for each group — without touching the files.
@@ -65,6 +66,8 @@ Both are off by default and controlled via VS Code settings (see [Configuration]
 ### Copy History
 Every copy is recorded in the *Copy History* panel. Re-copy, favourite, annotate, or delete past operations. Right-click a history entry to re-extract with a different context mode.
 
+Use the `+` inline button on any history entry to **append** it to the current clipboard instead of replacing it.
+
 **Add history files to a group** — right-click any history entry or individual file within it:
 - *Add All Files to Group* — adds every file from that snapshot to a group you pick
 - *Add File to Group* — adds just that one file
@@ -78,7 +81,7 @@ Every copy is recorded in the *Copy History* panel. Re-copy, favourite, annotate
 2. Open a project in VS Code
 3. Click the **Copy Groups** icon in the Activity Bar
 4. Press `Ctrl+Shift+G` to create your first group
-5. Right-click files in the explorer → **Add File to Group**
+5. Right-click files in the explorer → **Add File to Group**, or open a file and click the add icon in the editor toolbar
 6. Click the group to copy it to clipboard
 
 ---
