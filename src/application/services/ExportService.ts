@@ -280,6 +280,14 @@ export class ExportService {
     return { output, snapshots };
   }
 
+  async appendGroup(group: Group): Promise<{ output: string; snapshots: CopiedFileSnapshot[] }> {
+    const { output, snapshots } = await this.buildOutput(group);
+    const current = await vscode.env.clipboard.readText();
+    await vscode.env.clipboard.writeText(current ? `${current}\n\n---\n\n${output}` : output);
+    await this.historyService.record(group, output, snapshots, 'clipboard');
+    return { output, snapshots };
+  }
+
   async exportToMarkdown(group: Group, options: ExportOptions = {}): Promise<string> {
     const { output, snapshots } = await this.buildOutput(group, options.includePreprompt);
     await this.historyService.record(group, output, snapshots, 'export-markdown');

@@ -35,12 +35,7 @@ export interface CopyConfig {
 
 export const DEFAULT_COPY_CONFIG: CopyConfig = {
   defaultContextMode: 'full',
-  languageOverrides: {
-    markdown: 'skeleton',
-    python: 'skeleton',
-    robot: 'skeleton',
-    robotfile: 'skeleton',
-  },
+  languageOverrides: {},
   maxFileCount: 100,
   maxTotalSizeBytes: 5 * 1024 * 1024,        // 5 MB
   maxFileSizeBytes: 1024 * 1024,             // 1 MB per file

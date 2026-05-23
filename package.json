@@ -2,7 +2,7 @@
   "name": "vscode-copygroups",
   "displayName": "Copy Groups",
   "description": "Manage and share reusable file sets with AI-ready context filtering",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "publisher": "GSejas",
   "license": "MIT",
   "engines": {
@@ -76,6 +76,16 @@
         "command": "copygroups.copyGroup",
         "title": "Copy Groups: Copy to Clipboard",
         "icon": "$(clippy)"
+      },
+      {
+        "command": "copygroups.appendGroup",
+        "title": "Copy Groups: Append to Clipboard",
+        "icon": "$(add)"
+      },
+      {
+        "command": "copygroups.history.appendRecopy",
+        "title": "Append to Clipboard",
+        "icon": "$(add)"
       },
       {
         "command": "copygroups.copySelectedFiles",
@@ -220,6 +230,13 @@
       ]
     },
     "menus": {
+      "editor/title": [
+        {
+          "command": "copygroups.addToGroup",
+          "when": "resourceScheme == file",
+          "group": "navigation"
+        }
+      ],
       "view/title": [
         {
           "command": "copygroups.createGroup",
@@ -271,19 +288,24 @@
           "group": "inline@1"
         },
         {
-          "command": "copygroups.renameGroup",
+          "command": "copygroups.appendGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "inline@2"
         },
         {
-          "command": "copygroups.duplicateGroup",
+          "command": "copygroups.renameGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "inline@3"
         },
         {
-          "command": "copygroups.deleteGroup",
+          "command": "copygroups.duplicateGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "inline@4"
+        },
+        {
+          "command": "copygroups.deleteGroup",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "inline@5"
         },
         {
           "command": "copygroups.copyGroup",
@@ -291,9 +313,14 @@
           "group": "1_copy@1"
         },
         {
-          "command": "copygroups.toggleBookmark",
+          "command": "copygroups.appendGroup",
           "when": "view == copygroups.groups && viewItem =~ /groupItem/",
           "group": "1_copy@2"
+        },
+        {
+          "command": "copygroups.toggleBookmark",
+          "when": "view == copygroups.groups && viewItem =~ /groupItem/",
+          "group": "1_copy@3"
         },
         {
           "command": "copygroups.renameGroup",
@@ -331,14 +358,19 @@
           "group": "inline@1"
         },
         {
-          "command": "copygroups.history.toggleFavourite",
+          "command": "copygroups.history.appendRecopy",
           "when": "view == copygroups.history && viewItem == historyEntry",
           "group": "inline@2"
         },
         {
-          "command": "copygroups.history.delete",
+          "command": "copygroups.history.toggleFavourite",
           "when": "view == copygroups.history && viewItem == historyEntry",
           "group": "inline@3"
+        },
+        {
+          "command": "copygroups.history.delete",
+          "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "inline@4"
         },
         {
           "command": "copygroups.history.recopy",
@@ -346,9 +378,14 @@
           "group": "1_copy@1"
         },
         {
-          "command": "copygroups.history.toggleFavourite",
+          "command": "copygroups.history.appendRecopy",
           "when": "view == copygroups.history && viewItem == historyEntry",
           "group": "1_copy@2"
+        },
+        {
+          "command": "copygroups.history.toggleFavourite",
+          "when": "view == copygroups.history && viewItem == historyEntry",
+          "group": "1_copy@3"
         },
         {
           "command": "copygroups.history.addNote",
@@ -368,7 +405,7 @@
         {
           "command": "copygroups.history.addFilesToGroup",
           "when": "view == copygroups.history && viewItem == historyEntry",
-          "group": "1_copy@3"
+          "group": "1_copy@4"
         },
         {
           "command": "copygroups.history.addFileToGroup",
@@ -427,28 +464,91 @@
     "configuration": {
       "title": "Copy Groups",
       "properties": {
-        "copygroups.context.defaultMode": {
+        "copygroups.defaultContextMode": {
           "type": "string",
-          "enum": [
-            "full",
-            "skeleton"
-          ],
+          "enum": ["full", "skeleton", "docstring", "headers", "head-tail", "smart"],
           "default": "full",
-          "description": "Default context mode for copying files (full: extract all content, skeleton: directory structure only)"
+          "description": "Default extraction mode for new groups and files."
         },
-        "copygroups.context.languageOverrides": {
+        "copygroups.languageOverrides": {
           "type": "object",
           "default": {},
-          "description": "Per-language context mode overrides. Empty by default — the group mode applies. Set e.g. { \"markdown\": \"skeleton\" } to always extract skeleton for that language regardless of group mode.",
+          "description": "Per-language extraction mode overrides. Empty by default — the group mode applies to all files. Example: { \"markdown\": \"skeleton\" }.",
           "patternProperties": {
             ".*": {
               "type": "string",
-              "enum": [
-                "full",
-                "skeleton"
-              ]
+              "enum": ["full", "skeleton", "docstring", "headers", "head-tail", "smart"]
             }
           }
+        },
+        "copygroups.addLineNumbers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prepend line numbers to extracted code in clipboard output."
+        },
+        "copygroups.includeFileTree": {
+          "type": "boolean",
+          "default": false,
+          "description": "Prepend an ASCII project tree to the copied output."
+        },
+        "copygroups.fileTreeDepth": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "How many directory levels to show in the project tree."
+        },
+        "copygroups.includeNeighborFiles": {
+          "type": "boolean",
+          "default": false,
+          "description": "Append a list of sibling files (not copied) for each directory in the group."
+        },
+        "copygroups.neighborFileMode": {
+          "type": "string",
+          "enum": ["names", "content"],
+          "default": "names",
+          "description": "How to include neighbor files: 'names' lists them, 'content' includes their extracted code."
+        },
+        "copygroups.skipBinaryFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically skip binary files (images, executables, etc.)."
+        },
+        "copygroups.maxFileCount": {
+          "type": "number",
+          "default": 100,
+          "minimum": 1,
+          "description": "Stop adding files to output after this count."
+        },
+        "copygroups.maxFileSizeBytes": {
+          "type": "number",
+          "default": 1048576,
+          "minimum": 1024,
+          "description": "Skip individual files larger than this size in bytes (default 1 MB)."
+        },
+        "copygroups.maxTotalSizeBytes": {
+          "type": "number",
+          "default": 5242880,
+          "minimum": 1024,
+          "description": "Stop reading file content after this total size in bytes (default 5 MB)."
+        },
+        "copygroups.maxDirectoryDepth": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "description": "Maximum recursion depth when scanning folders added to a group."
+        },
+        "copygroups.includePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Glob patterns to include. Empty = include all files (subject to excludePatterns)."
+        },
+        "copygroups.excludePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["node_modules/**", ".git/**", "dist/**", "build/**", ".vscode/**", "**/.DS_Store", "**/*.log"],
+          "description": "Glob patterns to exclude from groups and folder scans."
         }
       }
     }

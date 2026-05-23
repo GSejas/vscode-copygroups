@@ -332,6 +332,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  // ── Command: append a group to clipboard (preserves existing clipboard content) ──
+  context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.appendGroup', async (arg?: GroupItem | string) => {
+      let groupId: string | undefined;
+      if (arg instanceof GroupItem) {
+        groupId = arg.group.id;
+      } else if (typeof arg === 'string') {
+        groupId = arg;
+      } else {
+        const groups = await groupService.getAllGroups();
+        if (groups.length === 0) {
+          vscode.window.showWarningMessage('No groups yet. Create one first with Ctrl+Shift+G.');
+          return;
+        }
+        const picked = await vscode.window.showQuickPick(
+          groups.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+            .map(g => ({ label: g.name, description: `${g.fileReferences.length} file(s) · ${g.contextMode.type}`, groupId: g.id })),
+          { placeHolder: 'Append which group to clipboard?' }
+        );
+        if (!picked) return;
+        groupId = picked.groupId;
+      }
+      const group = await groupService.getGroup(groupId!);
+      if (!group) { vscode.window.showErrorMessage('Group not found.'); return; }
+      const { output, snapshots } = await exportService.appendGroup(group);
+      historyProvider.refresh();
+      const successCount = snapshots.filter(s => !s.error).length;
+      const sizeKb = (output.length / 1024).toFixed(1);
+      vscode.window.showInformationMessage(`Appended "${group.name}" (${sizeKb} KB · ${successCount} file${successCount !== 1 ? 's' : ''}) to clipboard.`);
+    })
+  );
+
   // ── Group preview virtual document provider ──────────────────────────────
   // Uses a stable URI per group so re-previewing the same group reuses the tab.
   // URI scheme: copygroups-preview://<groupId>/<SafeGroupName>.md
@@ -755,6 +787,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('copygroups.history.appendRecopy', async (item: HistoryItem | string) => {
+      const id = item instanceof HistoryItem ? item.entry.id : item;
+      const all = await historyService.getAll();
+      const entry = all.find(e => e.id === id);
+      if (!entry) { vscode.window.showErrorMessage('History entry not found.'); return; }
+      const current = await vscode.env.clipboard.readText();
+      await vscode.env.clipboard.writeText(current ? `${current}\n\n---\n\n${entry.output}` : entry.output);
+      vscode.window.showInformationMessage('Appended to clipboard.');
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand(
       'copygroups.history.toggleFavourite',
       async (item: HistoryItem | string) => {
@@ -963,12 +1007,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const configObserver = {
     onStateChanged: () => {
-      console.log('[Extension] Config changed');
+      groupProvider.refresh();
     },
   };
 
   groupRepo.subscribe(groupObserver);
   configRepo.subscribe(configObserver);
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('copygroups')) {
+        configRepo.notifySettingsChanged();
+      }
+    })
+  );
 
   // Store references for cleanup
   const disposeResources = () => {

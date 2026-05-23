@@ -25,9 +25,27 @@ export class ConfigRepository extends BaseObservable<ConfigRepositoryChangeEvent
    * Initialize config repository - loads or creates default config
    */
   async initialize(): Promise<void> {
+    await this.migrateOldDefaults();
     const existing = await this.get();
     if (!existing) {
       await this.set(DEFAULT_COPY_CONFIG);
+    }
+  }
+
+  // Strip language override defaults that shipped in <=0.2.13 and were removed in 0.2.14.
+  private async migrateOldDefaults(): Promise<void> {
+    const stored = this.globalState.get<Partial<CopyConfig>>(CONFIG_KEY);
+    if (!stored?.languageOverrides) return;
+    const stale: Record<string, string> = { markdown: 'skeleton', python: 'skeleton', robot: 'skeleton', robotfile: 'skeleton' };
+    let changed = false;
+    for (const [lang, mode] of Object.entries(stale)) {
+      if (stored.languageOverrides[lang] === mode) {
+        delete stored.languageOverrides[lang];
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.globalState.update(CONFIG_KEY, stored);
     }
   }
 
@@ -99,6 +117,14 @@ export class ConfigRepository extends BaseObservable<ConfigRepositoryChangeEvent
       config: DEFAULT_COPY_CONFIG,
       timestamp: new Date(),
     });
+  }
+
+  /**
+   * Called when VS Code workspace settings change so observers can react without a globalState write.
+   */
+  async notifySettingsChanged(): Promise<void> {
+    const config = await this.get();
+    this.notifyObservers({ type: 'update', config, timestamp: new Date() });
   }
 
   /**

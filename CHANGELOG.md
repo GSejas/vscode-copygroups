@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.15] — 2026-05-23
+
+### Added
+- **Append to clipboard** — groups and history entries now have an `+` inline button (and right-click option) that appends to whatever is already on the clipboard, separated by `---`. Build up multi-group context incrementally without overwriting.
+- **Add to group from editor title bar** — a file-add icon now appears in the editor toolbar for any open file, letting you add it to a group without switching to the explorer.
+- **All settings now visible in VS Code Settings UI** — line numbers, file tree, size limits, patterns, neighbor files, and extraction mode are all configurable via the standard Settings editor. Previously only the default mode was exposed (and mapped to the wrong key, so it did nothing).
+- **VS Code settings changes now refresh tree views immediately** — changing a language override or any other setting in the Settings UI no longer requires an extension restart to take effect.
+
+### Fixed
+- **Language override migration** — existing users who installed ≤0.2.13 had `python`, `markdown`, `robot`, and `robotfile` defaulting to `skeleton` baked into saved state. The extension now silently clears those stale defaults on startup so all files default to `full` mode as intended.
+- **Settings keys were broken** — the two previously exposed settings (`copygroups.context.defaultMode`, `copygroups.context.languageOverrides`) never matched the keys ConfigRepository actually read, so they had no effect. Corrected to `copygroups.defaultContextMode` and `copygroups.languageOverrides`.
+
 ## [0.2.14] — 2026-05-07
 
 ### Fixed
